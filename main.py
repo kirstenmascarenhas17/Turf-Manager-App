@@ -1,9 +1,14 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from database import get_db
+from database import get_db, engine
+import models
+
+# Formally bind the metadata to create tables in MySQL
+models.Base.metadata.create_all(bind=engine)
 
 # Initialize the core application
+
 app = FastAPI(
     title="Turf Manager API",
     description="Backend API for the Community Sports Organizer",
