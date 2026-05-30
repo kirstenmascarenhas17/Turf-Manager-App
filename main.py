@@ -1,8 +1,10 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db, engine
 import models
+import schemas
+import crud
 
 # Formally bind the metadata to create tables in MySQL
 models.Base.metadata.create_all(bind=engine)
@@ -38,3 +40,19 @@ async def test_db_connection(db: Session = Depends(get_db)):
             "status": "error", 
             "message": f"Connection failed: {str(e)}"
         }
+
+@app.post("/users/", response_model=schemas.UserResponse)
+def create_user_endpoint(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    # 1. Check if the email already exists
+    db_user = crud.get_user_by_email(db, email=user.email)
+    
+    # 2. If it does, politely reject the request before hitting the database
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+        
+    # 3. If it's a new email, create the user
+    return crud.create_user(db=db, user=user)
+
+@app.post("/squads/", response_model=schemas.SquadResponse)
+def create_squad_endpoint(squad: schemas.SquadCreate, creator_id: int, db: Session = Depends(get_db)):
+    return crud.create_squad(db=db, squad=squad, creator_id=creator_id)
