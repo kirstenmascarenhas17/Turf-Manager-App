@@ -56,3 +56,28 @@ def create_user_endpoint(user: schemas.UserCreate, db: Session = Depends(get_db)
 @app.post("/squads/", response_model=schemas.SquadResponse)
 def create_squad_endpoint(squad: schemas.SquadCreate, creator_id: int, db: Session = Depends(get_db)):
     return crud.create_squad(db=db, squad=squad, creator_id=creator_id)
+
+@app.post("/matches/", response_model=schemas.MatchResponse)
+def create_match_endpoint(match: schemas.MatchCreate, db: Session = Depends(get_db)):
+    # Note: In a real app, we'd verify the squad_id actually exists first!
+    # For now, we assume the React frontend will send a valid squad_id.
+    return crud.create_match(db=db, match=match)
+
+@app.post("/rsvps/", response_model=schemas.RSVPResponse)
+def create_rsvp_endpoint(rsvp: schemas.RSVPToggle, db: Session = Depends(get_db)):
+    # Prevent Double-Booking: Check if this user is already in this match
+    existing_rsvp = db.query(models.RSVP).filter(
+        models.RSVP.match_id == rsvp.match_id,
+        models.RSVP.user_id == rsvp.user_id
+    ).first()
+
+    if existing_rsvp:
+        raise HTTPException(status_code=400, detail="User has already RSVP'd to this match")
+
+    # Run the RSVP logic
+    db_rsvp = crud.create_rsvp(db=db, rsvp=rsvp)
+    
+    if not db_rsvp:
+        raise HTTPException(status_code=404, detail="Match not found")
+        
+    return db_rsvp
