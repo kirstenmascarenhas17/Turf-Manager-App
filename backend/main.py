@@ -1,10 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from database import get_db, engine
-import models
-import schemas
-import crud
+from backend.database import get_db, engine
+import backend.models as models
+import backend.schemas as schemas
+import backend.crud as crud
 
 # Formally bind the metadata to create tables in MySQL
 models.Base.metadata.create_all(bind=engine)

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-import models, schemas
+import backend.models as models, backend.schemas as schemas
 import random
 import string
 
