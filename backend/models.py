@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DECIMAL, Da
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
-from backend.database import Base
+from database import Base
 
 # ==========================================
 # JUNCTION TABLE: Squad Members (Many-to-Many)

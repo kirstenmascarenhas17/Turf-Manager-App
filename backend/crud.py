@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
-import backend.models as models, backend.schemas as schemas
+import models
+import schemas
 import random
 import string
 
