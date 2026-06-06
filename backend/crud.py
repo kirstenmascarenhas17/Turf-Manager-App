@@ -31,7 +31,6 @@ def create_squad(db: Session, squad: schemas.SquadCreate, creator_id: int):
     db.refresh(db_squad)
     return db_squad
 
-
 def create_match(db: Session, match: schemas.MatchCreate):
     db_match = models.Match(
         squad_id=match.squad_id,
@@ -77,3 +76,47 @@ def create_rsvp(db: Session, rsvp: schemas.RSVPToggle):
 
 def get_squads(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Squad).offset(skip).limit(limit).all()
+
+def get_match_ledger(db: Session, match_id: int):
+    # 1. Fetch the specific match
+    match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if not match:
+        return None
+
+    # 2. Fetch only the ACTIVE players (ignore waitlisted/cancelled)
+    active_rsvps = db.query(models.RSVP).filter(
+        models.RSVP.match_id == match_id,
+        models.RSVP.status == models.RSVPStatus.ACTIVE
+    ).all()
+
+    active_count = len(active_rsvps)
+    
+    # 3. The Math Engine: Calculate the exact split
+    per_head = 0.0
+    if active_count > 0 and match.total_cost:
+        per_head = float(match.total_cost) / active_count
+
+    # 4. Gather the player details (we need their UPI IDs later!)
+    players = []
+    for rsvp in active_rsvps:
+        user = db.query(models.User).filter(models.User.id == rsvp.user_id).first()
+        if user:
+            players.append({
+                "user_id": user.id,
+                "name": user.name,
+                "upi_id": user.upi_id
+            })
+
+    # 5. Return the full financial payload
+    return {
+        "match_id": match.id,
+        "title": match.title,
+        "total_cost": float(match.total_cost) if match.total_cost else 0,
+        "active_players": active_count,
+        "cost_per_head": round(per_head, 2), # Round to 2 decimal places for currency
+        "squad_id": match.squad_id,
+        "players": players
+    }
+
+def get_matches(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Match).order_by(models.Match.date_time.desc()).offset(skip).limit(limit).all()

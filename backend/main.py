@@ -94,3 +94,17 @@ def create_rsvp_endpoint(rsvp: schemas.RSVPToggle, db: Session = Depends(get_db)
 @app.get("/squads/", response_model=List[schemas.SquadResponse])
 def read_squads_endpoint(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_squads(db=db, skip=skip, limit=limit)
+
+@app.get("/matches/{match_id}/ledger")
+def get_match_ledger_endpoint(match_id: int, db: Session = Depends(get_db)):
+    ledger_data = crud.get_match_ledger(db=db, match_id=match_id)
+    
+    if not ledger_data:
+        raise HTTPException(status_code=404, detail="Match not found")
+        
+    return ledger_data
+
+
+@app.get("/matches/")
+def read_matches_endpoint(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_matches(db=db, skip=skip, limit=limit)
