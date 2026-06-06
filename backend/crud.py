@@ -74,3 +74,6 @@ def create_rsvp(db: Session, rsvp: schemas.RSVPToggle):
     db.commit()
     db.refresh(db_rsvp)
     return db_rsvp
+
+def get_squads(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Squad).offset(skip).limit(limit).all()

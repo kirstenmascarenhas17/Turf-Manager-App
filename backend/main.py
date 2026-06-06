@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware 
+from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db, engine
@@ -14,6 +16,14 @@ app = FastAPI(
     title="Turf Manager API",
     description="Backend API for the Community Sports Organizer",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], # React's default URLs
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Create a health-check endpoint
@@ -80,3 +90,7 @@ def create_rsvp_endpoint(rsvp: schemas.RSVPToggle, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Match not found")
         
     return db_rsvp
+
+@app.get("/squads/", response_model=List[schemas.SquadResponse])
+def read_squads_endpoint(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_squads(db=db, skip=skip, limit=limit)
