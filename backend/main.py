@@ -7,7 +7,11 @@ from database import get_db, engine
 import models
 import schemas
 import crud
+import ai 
+from pydantic import BaseModel
 
+class AIRequest(BaseModel):
+    query: str
 # Formally bind the metadata to create tables in MySQL
 models.Base.metadata.create_all(bind=engine)
 
@@ -108,3 +112,8 @@ def get_match_ledger_endpoint(match_id: int, db: Session = Depends(get_db)):
 @app.get("/matches/")
 def read_matches_endpoint(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_matches(db=db, skip=skip, limit=limit)
+
+
+@app.post("/ai/ask")
+def ask_ai_endpoint(request: AIRequest, db: Session = Depends(get_db)):
+    return ai.ask_turf_manager_ai(db=db, user_query=request.query)
