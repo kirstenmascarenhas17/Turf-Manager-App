@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react'
 
 // Premium Athletic Color Palette
 const colors = {
-  bodyBg: "#0B0B0B",       // Deep, premium black background
-  cardBg: "#161616",       // Dark grey card containers for depth
-  border: "#262626",       // Subtle dark border lines
-  accentRed: "#B4121B",    // High-performance Crimson Red
-  textPrimary: "#FFFFFF",  // Crisp white for readability
-  textSecondary: "#A3A3A3",// Muted grey for sub-labels
-  inputBg: "#222222",      // Solid dark input background
+  bodyBg: "#0B0B0B",       
+  cardBg: "#161616",       
+  border: "#262626",       
+  accentRed: "#B4121B",    
+  textPrimary: "#FFFFFF",  
+  textSecondary: "#A3A3A3",
+  inputBg: "#222222",      
 }
 
 function App() {
@@ -17,6 +17,12 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [selectedLedger, setSelectedLedger] = useState(null)
   const [ledgerLoading, setLedgerLoading] = useState(false)
+  
+  // --- PHASE 5: AI STATE ---
+  const [aiQuery, setAiQuery] = useState('')
+  const [aiResponse, setAiResponse] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [isChatOpen, setIsChatOpen] = useState(false)
   
   const [matchForm, setMatchForm] = useState({
     title: '',
@@ -108,6 +114,33 @@ function App() {
     window.location.href = upiUrl;
   }
 
+  const handleAIQuery = async (e) => {
+    e.preventDefault();
+    if (!aiQuery.trim()) return;
+    
+    setAiLoading(true);
+    setAiResponse('');
+    
+    try {
+      const res = await fetch('http://127.0.0.1:8000/ai/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: aiQuery })
+      });
+      
+      const data = await res.json();
+      if (data.error) {
+        setAiResponse("AI Error: " + data.message);
+      } else {
+        setAiResponse(data.ai_answer);
+      }
+    } catch (error) {
+      setAiResponse("System Error: Could not reach the AI core.");
+      console.error("AI fetch failed", error);
+    }
+    setAiLoading(false);
+  }
+
   return (
     <div style={{ backgroundColor: colors.bodyBg, minHeight: '100vh', width: '100%', color: colors.textPrimary, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', margin: 0, padding: 0, boxSizing: 'border-box' }}>
       
@@ -116,33 +149,145 @@ function App() {
         * { box-sizing: border-box; }
         input, select { color: ${colors.textPrimary} !important; background-color: ${colors.inputBg} !important; }
         input::placeholder { color: #555555 !important; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
       `}</style>
 
-      {/* Navigation */}
-      <nav style={{ backgroundColor: '#000000', borderBottom: `2px solid ${colors.accentRed}`, padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <svg width="42" height="42" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="gradTop" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#FF2A35" />
-              <stop offset="100%" stopColor="#7A0C12" />
-            </linearGradient>
-            <linearGradient id="gradStem" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#B4121B" />
-              <stop offset="100%" stopColor="#4A050A" />
-            </linearGradient>
-            <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.6"/>
-            </filter>
-          </defs>
-          <rect x="38" y="30" width="24" height="60" rx="12" fill="url(#gradStem)" />
-          <rect x="10" y="15" width="80" height="28" rx="14" fill="url(#gradTop)" filter="url(#dropShadow)" />
-        </svg>
-        <span style={{ fontSize: '1.3rem', fontWeight: '900', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          TURF MANAGER <span style={{ color: colors.accentRed }}>// DASHBOARD</span>
-        </span>
+      {/* --- BULLETPROOF FIXED HEADER --- */}
+      <nav style={{ 
+        backgroundColor: '#000000', 
+        borderBottom: `2px solid ${colors.accentRed}`, 
+        padding: '0.75rem 2rem', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        position: 'fixed', 
+        top: 0, 
+        left: 0,
+        right: 0,
+        width: '100%',
+        zIndex: 2000, 
+        boxShadow: '0 4px 12px rgba(0,0,0,0.7)',
+        boxSizing: 'border-box'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <svg width="42" height="42" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gradTop" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#FF2A35" />
+                <stop offset="100%" stopColor="#7A0C12" />
+              </linearGradient>
+              <linearGradient id="gradStem" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#B4121B" />
+                <stop offset="100%" stopColor="#4A050A" />
+              </linearGradient>
+              <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.6"/>
+              </filter>
+            </defs>
+            <rect x="38" y="30" width="24" height="60" rx="12" fill="url(#gradStem)" />
+            <rect x="10" y="15" width="80" height="28" rx="14" fill="url(#gradTop)" filter="url(#dropShadow)" />
+          </svg>
+          <span style={{ fontSize: '1.3rem', fontWeight: '900', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            TURF MANAGER <span style={{ color: colors.accentRed }}>// DASHBOARD</span>
+          </span>
+        </div>
+
+        <div style={{ position: 'relative' }}> 
+          <button 
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            style={{
+              backgroundColor: 'transparent',
+              color: isChatOpen ? colors.accentRed : colors.textPrimary,
+              border: `1px solid ${isChatOpen ? colors.accentRed : colors.border}`,
+              borderRadius: '4px',
+              padding: '0.6rem 1.2rem',
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+              fontWeight: '800',
+              fontSize: '0.95rem',
+              letterSpacing: '0.05em',
+              transition: 'all 0.2s',
+              zIndex: 2001
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = colors.accentRed;
+              e.currentTarget.style.color = colors.accentRed;
+            }}
+            onMouseLeave={(e) => {
+              if (!isChatOpen) {
+                e.currentTarget.style.borderColor = colors.border;
+                e.currentTarget.style.color = colors.textPrimary;
+              }
+            }}
+          >
+            AI CHATBOT
+          </button>
+
+          {isChatOpen && (
+            <div style={{
+              position: 'absolute',
+              top: '120%', 
+              right: 0,
+              width: '380px', 
+              height: '520px', 
+              backgroundColor: colors.cardBg,
+              borderRadius: '8px',
+              border: `1px solid ${colors.border}`,
+              borderTop: `4px solid ${colors.accentRed}`,
+              boxShadow: '-8px 8px 32px rgba(0,0,0,0.9)',
+              display: 'flex',
+              flexDirection: 'column',
+              zIndex: 2000,
+              overflow: 'hidden'
+            }}>
+              
+              <div style={{ padding: '1rem', borderBottom: `1px solid ${colors.border}`, backgroundColor: '#111', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', letterSpacing: '0.05em', color: colors.accentRed }}>AI CHATBOT</h3>
+                <button onClick={() => setIsChatOpen(false)} style={{ background: 'none', border: 'none', color: colors.textSecondary, cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+              </div>
+
+              <div style={{ flex: 1, padding: '1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {aiResponse ? (
+                  <div style={{ padding: '1rem', backgroundColor: '#1C1C1C', borderRadius: '4px', borderLeft: `2px solid ${colors.accentRed}`, color: colors.textPrimary, fontSize: '0.95rem', lineHeight: '1.5' }}>
+                    {aiResponse}
+                  </div>
+                ) : (
+                  <p style={{ color: colors.textSecondary, fontSize: '0.9rem', textAlign: 'center', marginTop: 'auto', marginBottom: 'auto' }}>
+                    Ask me anything about your squads, matches, or ledger balances.
+                  </p>
+                )}
+              </div>
+
+              <form onSubmit={handleAIQuery} style={{ padding: '1rem', borderTop: `1px solid ${colors.border}`, backgroundColor: '#111', display: 'flex', gap: '0.5rem' }}>
+                <input 
+                  type="text" 
+                  placeholder="Ask a question..." 
+                  value={aiQuery} 
+                  onChange={(e) => setAiQuery(e.target.value)} 
+                  style={{ flex: 1, padding: '0.75rem', borderRadius: '4px', border: `1px solid ${colors.border}`, fontSize: '0.9rem', outline: 'none', width: '100%' }} 
+                  required 
+                />
+                <button 
+                  type="submit" 
+                  disabled={aiLoading} 
+                  style={{ backgroundColor: aiLoading ? '#555' : colors.accentRed, color: '#FFFFFF', padding: '0 1.25rem', borderRadius: '4px', border: 'none', fontWeight: '900', cursor: aiLoading ? 'not-allowed' : 'pointer', letterSpacing: '0.05em' }}
+                >
+                  {aiLoading ? "..." : "ASK"}
+                </button>
+              </form>
+
+            </div>
+          )}
+        </div>
       </nav>
       
-      <div style={{ width: '100%', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      {/* Added paddingTop to prevent the fixed header from overlapping your grid */}
+      <div style={{ width: '100%', padding: '2rem', paddingTop: '6.5rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         <main style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', width: '100%' }}>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -274,6 +419,7 @@ function App() {
           </div>
         </main>
       </div>
+      
     </div>
   )
 }
