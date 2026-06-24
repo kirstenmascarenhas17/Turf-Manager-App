@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 // Premium Athletic Color Palette
 const colors = {
@@ -16,14 +16,15 @@ function App() {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedLedger, setSelectedLedger] = useState(null)
-  const [ledgerLoading, setLedgerLoading] = useState(false)
   
-  // --- PHASE 5: AI STATE ---
+  // --- AI CHAT STATE ---
   const [aiQuery, setAiQuery] = useState('')
-  const [aiResponse, setAiResponse] = useState('')
+  const [chatHistory, setChatHistory] = useState([]) // Now an array to keep history!
   const [aiLoading, setAiLoading] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
   
+  const chatEndRef = useRef(null) // Used for auto-scrolling
+
   const [matchForm, setMatchForm] = useState({
     title: '',
     date_time: '',
@@ -32,6 +33,13 @@ function App() {
     max_slots: 10,
     squad_id: ''
   })
+
+  // Auto-scroll to the bottom of the chat when messages update
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [chatHistory, aiLoading])
 
   const fetchData = () => {
     fetch('http://127.0.0.1:8000/squads/')
@@ -93,7 +101,6 @@ function App() {
   }
 
   const handleViewLedger = async (matchId) => {
-    setLedgerLoading(true);
     try {
       const response = await fetch(`http://127.0.0.1:8000/matches/${matchId}/ledger`);
       if (response.ok) {
@@ -105,7 +112,6 @@ function App() {
     } catch (error) {
       console.error("Ledger fetch failed", error);
     }
-    setLedgerLoading(false);
   }
 
   const handleUPIPayment = (amount, title) => {
@@ -114,29 +120,35 @@ function App() {
     window.location.href = upiUrl;
   }
 
+  // --- UPDATED MESSAGE STREAM LOGIC ---
   const handleAIQuery = async (e) => {
     e.preventDefault();
     if (!aiQuery.trim()) return;
     
+    const userMessage = aiQuery;
+    
+    // Add user message to UI instantly
+    setChatHistory(prev => [...prev, { role: 'user', content: userMessage }]);
+    setAiQuery(''); // Clear the input box
     setAiLoading(true);
-    setAiResponse('');
     
     try {
       const res = await fetch('http://127.0.0.1:8000/ai/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: aiQuery })
+        body: JSON.stringify({ query: userMessage })
       });
       
       const data = await res.json();
+      
+      // Add AI response to UI
       if (data.error) {
-        setAiResponse("AI Error: " + data.message);
+        setChatHistory(prev => [...prev, { role: 'ai', content: "AI Error: " + data.message }]);
       } else {
-        setAiResponse(data.ai_answer);
+        setChatHistory(prev => [...prev, { role: 'ai', content: data.ai_answer }]);
       }
     } catch (error) {
-      setAiResponse("System Error: Could not reach the AI core.");
-      console.error("AI fetch failed", error);
+      setChatHistory(prev => [...prev, { role: 'ai', content: "System Error: Could not reach the AI core." }]);
     }
     setAiLoading(false);
   }
@@ -156,22 +168,12 @@ function App() {
         ::-webkit-scrollbar-thumb:hover { background: #555; }
       `}</style>
 
-      {/* --- BULLETPROOF FIXED HEADER --- */}
+      {/* FIXED HEADER */}
       <nav style={{ 
-        backgroundColor: '#000000', 
-        borderBottom: `2px solid ${colors.accentRed}`, 
-        padding: '0.75rem 2rem', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        position: 'fixed', 
-        top: 0, 
-        left: 0,
-        right: 0,
-        width: '100%',
-        zIndex: 2000, 
-        boxShadow: '0 4px 12px rgba(0,0,0,0.7)',
-        boxSizing: 'border-box'
+        backgroundColor: '#000000', borderBottom: `2px solid ${colors.accentRed}`, padding: '0.75rem 2rem', 
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+        position: 'fixed', top: 0, left: 0, right: 0, width: '100%', zIndex: 2000, 
+        boxShadow: '0 4px 12px rgba(0,0,0,0.7)', boxSizing: 'border-box'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <svg width="42" height="42" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -184,12 +186,9 @@ function App() {
                 <stop offset="0%" stopColor="#B4121B" />
                 <stop offset="100%" stopColor="#4A050A" />
               </linearGradient>
-              <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.6"/>
-              </filter>
             </defs>
             <rect x="38" y="30" width="24" height="60" rx="12" fill="url(#gradStem)" />
-            <rect x="10" y="15" width="80" height="28" rx="14" fill="url(#gradTop)" filter="url(#dropShadow)" />
+            <rect x="10" y="15" width="80" height="28" rx="14" fill="url(#gradTop)" />
           </svg>
           <span style={{ fontSize: '1.3rem', fontWeight: '900', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             TURF MANAGER <span style={{ color: colors.accentRed }}>// DASHBOARD</span>
@@ -214,36 +213,16 @@ function App() {
               transition: 'all 0.2s',
               zIndex: 2001
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = colors.accentRed;
-              e.currentTarget.style.color = colors.accentRed;
-            }}
-            onMouseLeave={(e) => {
-              if (!isChatOpen) {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.color = colors.textPrimary;
-              }
-            }}
           >
             AI CHATBOT
           </button>
 
           {isChatOpen && (
             <div style={{
-              position: 'absolute',
-              top: '120%', 
-              right: 0,
-              width: '380px', 
-              height: '520px', 
-              backgroundColor: colors.cardBg,
-              borderRadius: '8px',
-              border: `1px solid ${colors.border}`,
-              borderTop: `4px solid ${colors.accentRed}`,
-              boxShadow: '-8px 8px 32px rgba(0,0,0,0.9)',
-              display: 'flex',
-              flexDirection: 'column',
-              zIndex: 2000,
-              overflow: 'hidden'
+              position: 'absolute', top: '120%', right: 0, width: '380px', height: '520px', 
+              backgroundColor: colors.cardBg, borderRadius: '8px', border: `1px solid ${colors.border}`,
+              borderTop: `4px solid ${colors.accentRed}`, boxShadow: '-8px 8px 32px rgba(0,0,0,0.9)',
+              display: 'flex', flexDirection: 'column', zIndex: 2000, overflow: 'hidden'
             }}>
               
               <div style={{ padding: '1rem', borderBottom: `1px solid ${colors.border}`, backgroundColor: '#111', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -251,22 +230,46 @@ function App() {
                 <button onClick={() => setIsChatOpen(false)} style={{ background: 'none', border: 'none', color: colors.textSecondary, cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
               </div>
 
+              {/* MESSAGE STREAM UI */}
               <div style={{ flex: 1, padding: '1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {aiResponse ? (
-                  <div style={{ padding: '1rem', backgroundColor: '#1C1C1C', borderRadius: '4px', borderLeft: `2px solid ${colors.accentRed}`, color: colors.textPrimary, fontSize: '0.95rem', lineHeight: '1.5' }}>
-                    {aiResponse}
-                  </div>
-                ) : (
-                  <p style={{ color: colors.textSecondary, fontSize: '0.9rem', textAlign: 'center', marginTop: 'auto', marginBottom: 'auto' }}>
+                {chatHistory.length === 0 ? (
+                  <p style={{ color: colors.textSecondary, fontSize: '0.9rem', textAlign: 'center', margin: 'auto' }}>
                     Ask me anything about your squads, matches, or ledger balances.
                   </p>
+                ) : (
+                  chatHistory.map((msg, idx) => (
+                    <div key={idx} style={{
+                      alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                      backgroundColor: msg.role === 'user' ? colors.accentRed : '#1C1C1C',
+                      color: colors.textPrimary,
+                      padding: '0.75rem 1rem',
+                      borderRadius: '8px',
+                      borderBottomRightRadius: msg.role === 'user' ? '0' : '8px',
+                      borderBottomLeftRadius: msg.role === 'ai' ? '0' : '8px',
+                      maxWidth: '85%',
+                      fontSize: '0.9rem',
+                      lineHeight: '1.4',
+                      border: msg.role === 'ai' ? `1px solid ${colors.border}` : 'none'
+                    }}>
+                      {/* Using dangerouslySetInnerHTML to parse any bold asterisks if needed, but keeping it simple for now */}
+                      {msg.content}
+                    </div>
+                  ))
                 )}
+                
+                {aiLoading && (
+                  <div style={{ alignSelf: 'flex-start', backgroundColor: '#1C1C1C', color: colors.textSecondary, padding: '0.75rem 1rem', borderRadius: '8px', borderBottomLeftRadius: '0', fontSize: '0.9rem', border: `1px solid ${colors.border}` }}>
+                    Thinking...
+                  </div>
+                )}
+                {/* Invisible element to anchor the auto-scroll */}
+                <div ref={chatEndRef} />
               </div>
 
               <form onSubmit={handleAIQuery} style={{ padding: '1rem', borderTop: `1px solid ${colors.border}`, backgroundColor: '#111', display: 'flex', gap: '0.5rem' }}>
                 <input 
                   type="text" 
-                  placeholder="Ask a question..." 
+                  placeholder="Type a message..." 
                   value={aiQuery} 
                   onChange={(e) => setAiQuery(e.target.value)} 
                   style={{ flex: 1, padding: '0.75rem', borderRadius: '4px', border: `1px solid ${colors.border}`, fontSize: '0.9rem', outline: 'none', width: '100%' }} 
@@ -277,7 +280,7 @@ function App() {
                   disabled={aiLoading} 
                   style={{ backgroundColor: aiLoading ? '#555' : colors.accentRed, color: '#FFFFFF', padding: '0 1.25rem', borderRadius: '4px', border: 'none', fontWeight: '900', cursor: aiLoading ? 'not-allowed' : 'pointer', letterSpacing: '0.05em' }}
                 >
-                  {aiLoading ? "..." : "ASK"}
+                  ASK
                 </button>
               </form>
 
@@ -286,7 +289,6 @@ function App() {
         </div>
       </nav>
       
-      {/* Added paddingTop to prevent the fixed header from overlapping your grid */}
       <div style={{ width: '100%', padding: '2rem', paddingTop: '6.5rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         <main style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', width: '100%' }}>
           
@@ -399,10 +401,6 @@ function App() {
                           : (selectedLedger.total_cost / (matches.find(m => m.id === selectedLedger.match_id)?.max_slots || 10)).toFixed(2)}
                     </span>
                   </div>
-
-                  <p style={{ fontSize: '0.8rem', color: colors.textSecondary, textAlign: 'right', marginTop: '-0.5rem' }}>
-                    {selectedLedger.active_players === 0 ? "(Estimated based on total slots)" : "(Based on actual RSVPs)"}
-                  </p>
 
                   <button 
                     onClick={() => handleUPIPayment(
