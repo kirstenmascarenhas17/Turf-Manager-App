@@ -34,6 +34,7 @@ class User(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     upi_id = Column(String(100), nullable=True)
+    password = Column(String(255))
     created_at = Column(DateTime, server_default=func.now())
 
     # Relationships

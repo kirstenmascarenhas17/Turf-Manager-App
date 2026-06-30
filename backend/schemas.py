@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     name: str
     email: EmailStr
     upi_id: Optional[str] = None
+    password: str
 
 class UserCreate(UserBase):
     pass

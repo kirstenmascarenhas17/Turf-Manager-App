@@ -10,7 +10,7 @@ def get_user_by_email(db: Session, email: str):
 
 def create_user(db: Session, user: schemas.UserCreate):
     # Convert Pydantic schema to SQLAlchemy model
-    db_user = models.User(name=user.name, email=user.email, upi_id=user.upi_id)
+    db_user = models.User(name=user.name, email=user.email, upi_id=user.upi_id, password=user.password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)

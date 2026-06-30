@@ -37,18 +37,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# This is the exact door Flutter is knocking on!
+# We add 'db: Session = Depends(get_db)' so this route can talk to MySQL
 @app.post("/login")
-def process_login(user: LoginRequest):
-    print(f"Flutter sent us: {user.email}")
+def process_login(user: LoginRequest, db: Session = Depends(get_db)):
+    print(f"Flutter attempting login for: {user.email}")
     
-    # We will hook this up to your MySQL database later. 
-    # For now, let's hardcode a test user!
-    if user.email == "admin@turf.com" and user.password == "password123":
-        return {"status": "success", "message": "Welcome to the pitch!"}
+    # 1. Query the database for this specific email
+    db_user = crud.get_user_by_email(db, email=user.email)
     
-    # If the password is wrong, throw an error
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+    # 2. If the email doesn't exist, or the password doesn't match, reject them
+    # Note: For production, we will upgrade this to check hashed passwords using bcrypt.
+    # For now, we will verify against the exact password string stored in your DB.
+    if not db_user or db_user.password != user.password:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # 3. If everything matches, let them in!
+    return {
+        "status": "success", 
+        "message": "Welcome to the pitch!",
+        "user_id": db_user.id  # Sending the ID back so Flutter knows exactly who logged in
+    }
 
 # Create a health-check endpoint
 @app.get("/ping")
