@@ -15,6 +15,13 @@ class AIRequest(BaseModel):
 # Formally bind the metadata to create tables in MySQL
 models.Base.metadata.create_all(bind=engine)
 
+
+# This tells Python what data to expect from Flutter
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
 # Initialize the core application
 app = FastAPI(
     title="Turf Manager API",
@@ -29,6 +36,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# This is the exact door Flutter is knocking on!
+@app.post("/login")
+def process_login(user: LoginRequest):
+    print(f"Flutter sent us: {user.email}")
+    
+    # We will hook this up to your MySQL database later. 
+    # For now, let's hardcode a test user!
+    if user.email == "admin@turf.com" and user.password == "password123":
+        return {"status": "success", "message": "Welcome to the pitch!"}
+    
+    # If the password is wrong, throw an error
+    raise HTTPException(status_code=401, detail="Invalid credentials")
 
 # Create a health-check endpoint
 @app.get("/ping")

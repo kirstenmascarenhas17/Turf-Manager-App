@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 void main() {
   runApp(const TurfManagerApp());
@@ -49,17 +51,60 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  // --- THIS IS THE UPDATED SECTION ---
+  Future<void> _handleLogin() async {
     final email = _emailController.text;
-    print('Attempting login with: $email');
+    final password = _passwordController.text;
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const TurfDashboardScreen(),
-      ),
-    );
+    // Use the exact IP address from your hotspot
+    final url = Uri.parse('http://10.73.60.1:8000/login'); 
+
+    try {
+      // Sending the POST request to your Python backend
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+        }),
+      );
+
+      // Check if the backend gave us a thumbs up (Status 200 OK)
+      if (response.statusCode == 200) {
+        // Success! Push to the dashboard
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const TurfDashboardScreen(),
+            ),
+          );
+        }
+      } else {
+        // Show an error banner on the phone screen if login fails
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Login Failed: ${response.body}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Catch network errors (like if the server isn't running)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Network Error: Could not connect to server.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
+  // --- END OF UPDATED SECTION ---
 
   @override
   Widget build(BuildContext context) {
