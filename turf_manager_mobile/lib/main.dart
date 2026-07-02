@@ -647,7 +647,7 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
 }
 
 class MatchDetailsScreen extends StatefulWidget {
-  final Map<String, dynamic> match; // We pass the specific match data into this screen
+  final Map<String, dynamic> match;
 
   const MatchDetailsScreen({super.key, required this.match});
 
@@ -657,13 +657,50 @@ class MatchDetailsScreen extends StatefulWidget {
 
 class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   bool _isJoining = false;
+  bool _isLoadingRoster = true;
+  List<dynamic> _roster = [];
+  int _playerCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRoster();
+  }
+
+  // --- NEW: FETCH ROSTER LOGIC ---
+  Future<void> _fetchRoster() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    if (token == null) return;
+
+    final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.match['id']}/roster');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _roster = data['players'];
+            _playerCount = data['player_count'];
+            _isLoadingRoster = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingRoster = false);
+    }
+  }
 
   Future<void> _joinMatch() async {
     setState(() => _isJoining = true);
 
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
-
     if (token == null) return;
 
     final url = Uri.parse('http://10.73.60.1:8000/rsvps/');
@@ -676,20 +713,19 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
-          'match_id': widget.match['id'], // We tell Python which match we want!
+          'match_id': widget.match['id'],
           'status': 'going'
         }),
       );
 
       if (mounted) {
         if (response.statusCode == 200 || response.statusCode == 201) {
-          // Success! Show a green confirmation and go back to the dashboard
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('You are on the roster!'), backgroundColor: Colors.green),
           );
-          Navigator.pop(context);
+          // REFRESH THE ROSTER INSTANTLY
+          _fetchRoster(); 
         } else if (response.statusCode == 400) {
-          // The backend caught a double-booking
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('You are already joined!'), backgroundColor: Colors.orange),
           );
@@ -717,69 +753,132 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         title: const Text('Match Details', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Icon(Icons.stadium, size: 100, color: Colors.red),
-            const SizedBox(height: 24),
-            
-            Text(
-              widget.match['title'],
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            
-            // Info Box
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.withOpacity(0.5)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today, color: Colors.grey, size: 20),
-                      const SizedBox(width: 10),
-                      Text(widget.match['time'], style: const TextStyle(fontSize: 18)),
-                    ],
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // TOP SECTION: Match Info
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              children: [
+                const Icon(Icons.stadium, size: 80, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  widget.match['title'],
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.withOpacity(0.5)),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
+                  child: Column(
                     children: [
-                      const Icon(Icons.location_on, color: Colors.grey, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(widget.match['location'], style: const TextStyle(fontSize: 18)),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today, color: Colors.grey, size: 20),
+                          const SizedBox(width: 10),
+                          Text(widget.match['time'], style: const TextStyle(fontSize: 16)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.grey, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(widget.match['location'], style: const TextStyle(fontSize: 16)),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 56),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _isJoining ? null : _joinMatch,
+                  child: _isJoining
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text('JOIN SQUAD', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
-            const Spacer(),
-            
-            // Join Button
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: _isJoining ? null : _joinMatch,
-              child: _isJoining
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('JOIN SQUAD', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          ),
+          
+          const Divider(color: Colors.grey, thickness: 0.5),
+          
+          // BOTTOM SECTION: The Live Roster
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Current Roster',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$_playerCount Players',
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-          ],
-        ),
+          ),
+          
+          Expanded(
+            child: _isLoadingRoster
+                ? const Center(child: CircularProgressIndicator(color: Colors.red))
+                : _roster.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No players yet. Be the first!',
+                          style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        itemCount: _roster.length,
+                        itemBuilder: (context, index) {
+                          return Card(
+                            color: const Color(0xFF1E1E1E),
+                            margin: const EdgeInsets.only(bottom: 8.0),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.red,
+                                child: Text(
+                                  _roster[index][0].toUpperCase(), // Gets the first letter of their name
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              title: Text(
+                                _roster[index],
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

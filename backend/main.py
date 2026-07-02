@@ -214,6 +214,38 @@ def create_rsvp_endpoint(
         
     return db_rsvp
 
+# --- PROTECTED ROSTER ROUTE (THE ENUM BYPASS) ---
+@app.get("/matches/{match_id}/roster")
+def get_match_roster(
+    match_id: int, 
+    current_user: models.User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    # 1. Grab ALL RSVPs for this match to bypass database-level strictness
+    all_rsvps = db.query(models.RSVP).filter(models.RSVP.match_id == match_id).all()
+    
+    # 2. Filter them in standard Python where we make the rules
+    user_ids = []
+    for rsvp in all_rsvps:
+        status_str = str(rsvp.status)
+        # If the string contains 'going' or 'ACTIVE', they make the roster!
+        if "going" in status_str or "ACTIVE" in status_str:
+            if rsvp.user_id:
+                user_ids.append(rsvp.user_id)
+    
+    # 3. Look up the users
+    if not user_ids:
+        player_names = []
+    else:
+        players = db.query(models.User).filter(models.User.id.in_(user_ids)).all()
+        player_names = [player.name for player in players]
+    
+    return {
+        "match_id": match_id,
+        "player_count": len(player_names),
+        "players": player_names
+    }
+
 @app.get("/squads/", response_model=List[schemas.SquadResponse])
 def read_squads_endpoint(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_squads(db=db, skip=skip, limit=limit)
