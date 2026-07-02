@@ -110,19 +110,26 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 # --- PROTECTED DASHBOARD ROUTE ---
 @app.get("/me/dashboard")
 def get_user_dashboard(current_user: models.User = Depends(get_current_user)):
-    # Because of the bouncer (Depends), this code ONLY runs if the token is valid.
-    
-    # For now, we will return the user's details to prove the connection works.
-    # Next, we will upgrade this to query the DB for their specific matches!
+    # Sending the user's name PLUS a list of matches
     return {
         "status": "success",
         "message": f"Welcome back, {current_user.name}!",
-        "user_data": {
-            "name": current_user.name,
-            "email": current_user.email,
-            "upi_id": current_user.upi_id
-        }
+        "upcoming_matches": [
+            {
+                "id": 1, 
+                "title": "Friday Night Lights", 
+                "time": "8:00 PM", 
+                "location": "Andheri Sports Complex"
+            },
+            {
+                "id": 2, 
+                "title": "Sunday Scrimmage", 
+                "time": "10:00 AM", 
+                "location": "Bandra Turf"
+            }
+        ]
     }
+
 # Create a health-check endpoint
 @app.get("/ping")
 async def ping():

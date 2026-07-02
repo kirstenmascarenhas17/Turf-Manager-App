@@ -257,20 +257,68 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class TurfDashboardScreen extends StatelessWidget {
+class TurfDashboardScreen extends StatefulWidget {
   const TurfDashboardScreen({super.key});
 
-  // --- NEW LOGOUT FUNCTION ---
-  Future<void> _handleLogout(BuildContext context) async {
-    // 1. Open the vault
-    final prefs = await SharedPreferences.getInstance();
-    
-    // 2. Delete the specific JWT token
-    await prefs.remove('jwt_token');
-    
-    print('Vault Emptied: User logged out.');
+  @override
+  State<TurfDashboardScreen> createState() => _TurfDashboardScreenState();
+}
 
-    // 3. Kick the user back to the Login Screen
+class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
+  String _welcomeMessage = "Loading pitch data...";
+  bool _isLoading = true;
+  List<dynamic> _matches = []; // <-- New Vault for our match list
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDashboardData();
+  }
+
+  Future<void> _fetchDashboardData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+
+    if (token == null) {
+      _handleLogout(context);
+      return;
+    }
+
+    final url = Uri.parse('http://10.73.60.1:8000/me/dashboard');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _welcomeMessage = data['message'];
+          _matches = data['upcoming_matches']; // <-- Catch the list from Python!
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _welcomeMessage = "Session expired. Please log in again.";
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _welcomeMessage = "Network error. Cannot reach the pitch.";
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token');
     if (context.mounted) {
       Navigator.pushReplacement(
         context,
@@ -285,7 +333,6 @@ class TurfDashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Pitch Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        // --- NEW LOGOUT BUTTON IN THE TOP RIGHT ---
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.red),
@@ -294,24 +341,75 @@ class TurfDashboardScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.sports_soccer, size: 100, color: Colors.red),
-            SizedBox(height: 20),
-            Text(
-              'Welcome to the Pitch!',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      body: _isLoading 
+          ? const Center(child: CircularProgressIndicator(color: Colors.red))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. The Welcome Header
+                Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.sports_soccer, size: 60, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text(
+                        _welcomeMessage,
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // 2. The Title for the List
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    'Upcoming Matches',
+                    style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // 3. The Dynamic Scrollable List
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    itemCount: _matches.length,
+                    itemBuilder: (context, index) {
+                      final match = _matches[index];
+                      // Building a Red & Black Card for every match the backend sends
+                      return Card(
+                        color: const Color(0xFF1E1E1E), // Slightly lighter black for contrast
+                        margin: const EdgeInsets.only(bottom: 12.0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Colors.red, width: 1), // Red border
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16.0),
+                          leading: const Icon(Icons.stadium, color: Colors.red, size: 36),
+                          title: Text(
+                            match['title'],
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          ),
+                          subtitle: Padding(
+                            // FIXED: The rogue parenthesis and property name have been corrected here!
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              '${match['time']} • ${match['location']}',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                          trailing: const Icon(Icons.chevron_right, color: Colors.red),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-            SizedBox(height: 10),
-            Text(
-              'Your weekend football match is confirmed.',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
