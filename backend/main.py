@@ -13,8 +13,10 @@ import schemas
 import crud
 import ai 
 from pydantic import BaseModel
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import PyJWTError
+import string
+import random
 
 load_dotenv()
 
@@ -80,7 +82,7 @@ def process_login(user: LoginRequest, db: Session = Depends(get_db)):
         "token_type": "bearer"
     }
 # This tells FastAPI where to look for the token in the request
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="swagger-login")
 
 # --- THE BOUNCER FUNCTION ---
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -171,8 +173,27 @@ def create_user_endpoint(user: schemas.UserCreate, db: Session = Depends(get_db)
     return crud.create_user(db=db, user=user)
 
 @app.post("/squads/", response_model=schemas.SquadResponse)
-def create_squad_endpoint(squad: schemas.SquadCreate, creator_id: int, db: Session = Depends(get_db)):
-    return crud.create_squad(db=db, squad=squad, creator_id=creator_id)
+def create_squad_endpoint(
+    squad: schemas.SquadCreate, 
+    current_user: models.User = Depends(get_current_user), # <-- Let the Bouncer handle the identity
+    db: Session = Depends(get_db)
+):
+    # 1. Generate the secure code
+    letters_and_digits = string.ascii_uppercase + string.digits
+    unique_code = ''.join(random.choice(letters_and_digits) for i in range(6))
+    
+    # 2. Package the data, extracting the ID securely from the token
+    new_squad = models.Squad(
+        name=squad.name,
+        invite_code=unique_code,
+        creator_id=current_user.id # <-- The ID is injected here behind the scenes!
+    )
+    
+    db.add(new_squad)
+    db.commit()
+    db.refresh(new_squad)
+    
+    return new_squad
 
 # --- PROTECTED CREATE MATCH ROUTE ---
 @app.post("/matches/", response_model=schemas.MatchResponse)
@@ -286,3 +307,57 @@ def read_matches_endpoint(skip: int = 0, limit: int = 100, db: Session = Depends
 @app.post("/ai/ask")
 def ask_ai_endpoint(request: AIRequest, db: Session = Depends(get_db)):
     return ai.ask_turf_manager_ai(db=db, user_query=request.query)
+
+
+# --- PROTECTED SQUAD CREATION ROUTE ---
+@app.post("/squads/", response_model=schemas.SquadResponse)
+def create_squad_endpoint(
+    squad: schemas.SquadCreate, 
+    current_user: models.User = Depends(get_current_user), # The Bouncer ensures only logged-in users create squads
+    db: Session = Depends(get_db)
+):
+    # 1. Generate a secure, 6-character uppercase alphanumeric invite code
+    letters_and_digits = string.ascii_uppercase + string.digits
+    unique_code = ''.join(random.choice(letters_and_digits) for i in range(6))
+    
+    # 2. Package the data for the database
+    new_squad = models.Squad(
+        name=squad.name,
+        invite_code=unique_code,
+        creator_id=current_user.id # You are officially the captain
+    )
+    
+    # 3. Save it to MySQL
+    db.add(new_squad)
+    db.commit()
+    db.refresh(new_squad)
+    
+    # Note: In the next step, we will also add the creator to a 'squad_members' table 
+    # so you are automatically in your own squad!
+    
+    return new_squad
+
+# --- THE SWAGGER SECRET ENTRANCE (FIXED) ---
+@app.post("/swagger-login")
+def login_for_swagger(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    # 1. Find the user
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+        
+    # 2. Build the token payload exactly like your main login route
+    token_data = {
+        "sub": str(user.id),
+        "email": user.email,
+        "exp": datetime.utcnow() + timedelta(days=7)
+    }
+    
+    # 3. Generate the actual token string
+    access_token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+    
+    # 4. Return it in the strict format Swagger requires
+    return {"access_token": access_token, "token_type": "bearer"}

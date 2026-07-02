@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart'; 
 
 void main() {
   runApp(const TurfManagerApp());
@@ -639,6 +640,24 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
                   ? const CircularProgressIndicator(color: Colors.white)
                   : const Text('SCHEDULE MATCH', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.group_add, size: 24),
+              label: const Text('Create a Squad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 56), // Makes it a nice wide block
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CreateSquadScreen()),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -859,6 +878,168 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+class CreateSquadScreen extends StatefulWidget {
+  const CreateSquadScreen({super.key});
+
+  @override
+  State<CreateSquadScreen> createState() => _CreateSquadScreenState();
+}
+
+class _CreateSquadScreenState extends State<CreateSquadScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  bool _isLoading = false;
+  String? _generatedCode;
+
+  Future<void> _createSquad() async {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a squad name'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+
+    final url = Uri.parse('http://10.73.60.1:8000/squads/');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'name': _nameController.text.trim()}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _generatedCode = data['invite_code']; // The backend hands us the 6-digit code!
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to create squad'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Network Error'), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Forge a Squad', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.shield, size: 80, color: Colors.red),
+            const SizedBox(height: 24),
+            
+            // 1. THE INPUT FORM (Hidden if code is already generated)
+            if (_generatedCode == null) ...[
+              const Text(
+                'Give your squad a legendary name.',
+                style: TextStyle(fontSize: 18, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              TextField(
+                controller: _nameController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Squad Name (e.g. Weekend Warriors)',
+                  labelStyle: const TextStyle(color: Colors.grey),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: Colors.red, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFF1E1E1E),
+                ),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _isLoading ? null : _createSquad,
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('CREATE SQUAD', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+            ],
+
+            // 2. THE SUCCESS SCREEN (Shows the Invite Code)
+            if (_generatedCode != null) ...[
+              const Text(
+                'Squad Created Successfully!',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red, width: 2),
+                ),
+                child: Column(
+                  children: [
+                    const Text('YOUR INVITE CODE', style: TextStyle(color: Colors.grey, letterSpacing: 2)),
+                    const SizedBox(height: 12),
+                    Text(
+                      _generatedCode!,
+                      style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, letterSpacing: 8, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.copy, color: Colors.red),
+                label: const Text('COPY TO CLIPBOARD', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red, width: 2),
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: _generatedCode!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Code copied! Send it to your friends.'), backgroundColor: Colors.green),
+                  );
+                },
+              ),
+            ]
+          ],
+        ),
       ),
     );
   }
