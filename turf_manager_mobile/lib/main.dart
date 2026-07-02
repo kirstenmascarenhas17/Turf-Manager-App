@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const TurfManagerApp());
@@ -14,21 +15,74 @@ class TurfManagerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Turf Manager',
       debugShowCheckedModeBanner: false,
-      // Here is our new Red & Black Global Theme
       theme: ThemeData(
-        brightness: Brightness.dark, // Automatically turns default text white
-        scaffoldBackgroundColor: const Color(0xFF121212), // Deep modern black
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF121212),
         primaryColor: Colors.red,
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.black,
-          foregroundColor: Colors.red, // Red text on the App Bar
+          foregroundColor: Colors.red,
           elevation: 0,
         ),
         textSelectionTheme: const TextSelectionThemeData(
           cursorColor: Colors.red,
         ),
       ),
-      home: const LoginScreen(),
+      // App now boots into the Vault Checker first!
+      home: const AuthWrapper(), 
+    );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    _checkVault();
+  }
+
+  Future<void> _checkVault() async {
+    // 1. Open the vault
+    final prefs = await SharedPreferences.getInstance();
+    
+    // 2. Look for the token
+    final token = prefs.getString('jwt_token');
+
+    // Add a tiny delay just so you can see the loading animation!
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (mounted) {
+      if (token != null) {
+        print('Vault Check: Token found! Bypassing login.');
+        // Token exists -> Go straight to the Dashboard
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const TurfDashboardScreen()),
+        );
+      } else {
+        print('Vault Check: Vault empty. Routing to login.');
+        // No token -> Go to Login Screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(color: Colors.red),
+      ),
     );
   }
 }
@@ -51,7 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // --- THIS IS THE UPDATED SECTION ---
   Future<void> _handleLogin() async {
     final email = _emailController.text;
     final password = _passwordController.text;
@@ -60,7 +113,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final url = Uri.parse('http://10.73.60.1:8000/login'); 
 
     try {
-      // Sending the POST request to your Python backend
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -70,11 +122,22 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
 
-      // Check if the backend gave us a thumbs up (Status 200 OK)
       if (response.statusCode == 200) {
-        // Success! Push to the dashboard
+        // Unpack the JSON data sent from Python
+        final responseData = jsonDecode(response.body);
+        
+        // Extract the VIP wristband (JWT)
+        final token = responseData['access_token'];
+        
+        // Open the device's vault and save the token
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', token);
+        
+        print('Success! Token saved securely on the device.');
+
+        // Push to the dashboard
         if (mounted) {
-          Navigator.push(
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => const TurfDashboardScreen(),
@@ -82,18 +145,16 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        // Show an error banner on the phone screen if login fails
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Login Failed: ${response.body}'),
+            const SnackBar(
+              content: Text('Login Failed: Invalid credentials'),
               backgroundColor: Colors.red,
             ),
           );
         }
       }
     } catch (e) {
-      // Catch network errors (like if the server isn't running)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -104,7 +165,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
   }
-  // --- END OF UPDATED SECTION ---
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Icon(
                 Icons.sports_soccer,
                 size: 80,
-                color: Colors.red, // Updated to Red
+                color: Colors.red,
               ),
               const SizedBox(height: 20),
               const Text(
@@ -176,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // Login Button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red, // Updated to Red
+                  backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -211,7 +271,7 @@ class TurfDashboardScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.sports_soccer, size: 100, color: Colors.red), // Updated to Red
+            Icon(Icons.sports_soccer, size: 100, color: Colors.red),
             SizedBox(height: 20),
             Text(
               'Welcome to the Pitch!',

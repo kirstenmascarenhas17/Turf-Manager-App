@@ -1,3 +1,7 @@
+import os
+from dotenv import load_dotenv
+import jwt
+from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware 
 from typing import List
@@ -9,6 +13,12 @@ import schemas
 import crud
 import ai 
 from pydantic import BaseModel
+
+
+load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = "HS256"
 
 class AIRequest(BaseModel):
     query: str
@@ -37,25 +47,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# We add 'db: Session = Depends(get_db)' so this route can talk to MySQL
+# Secret key to sign the VIP wristbands (In production, this goes in an .env file!)
+SECRET_KEY = "turf_manager_super_secret_key"
+ALGORITHM = "HS256"
+
 @app.post("/login")
 def process_login(user: LoginRequest, db: Session = Depends(get_db)):
     print(f"Flutter attempting login for: {user.email}")
     
-    # 1. Query the database for this specific email
     db_user = crud.get_user_by_email(db, email=user.email)
     
-    # 2. If the email doesn't exist, or the password doesn't match, reject them
-    # Note: For production, we will upgrade this to check hashed passwords using bcrypt.
-    # For now, we will verify against the exact password string stored in your DB.
     if not db_user or db_user.password != user.password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # 3. If everything matches, let them in!
+    # --- NEW JWT LOGIC ---
+    # Create the data payload for the token
+    token_data = {
+        "sub": str(db_user.id),          # The user's ID
+        "email": db_user.email,          # The user's email
+        "exp": datetime.utcnow() + timedelta(days=7)  # Token expires in 7 days
+    }
+    
+    # Generate the actual token string
+    access_token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+    
+    # Send the token back to the phone!
     return {
         "status": "success", 
         "message": "Welcome to the pitch!",
-        "user_id": db_user.id  # Sending the ID back so Flutter knows exactly who logged in
+        "access_token": access_token,
+        "token_type": "bearer"
     }
 
 # Create a health-check endpoint
