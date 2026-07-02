@@ -13,7 +13,8 @@ import schemas
 import crud
 import ai 
 from pydantic import BaseModel
-
+from fastapi.security import OAuth2PasswordBearer
+from jwt.exceptions import PyJWTError
 
 load_dotenv()
 
@@ -78,7 +79,50 @@ def process_login(user: LoginRequest, db: Session = Depends(get_db)):
         "access_token": access_token,
         "token_type": "bearer"
     }
+# This tells FastAPI where to look for the token in the request
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
+# --- THE BOUNCER FUNCTION ---
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # 1. Decode the VIP wristband using our secret key
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("email")
+        if email is None:
+            raise credentials_exception
+    except PyJWTError:
+        raise credentials_exception
+        
+    # 2. Check if the user still exists in the database
+    user = crud.get_user_by_email(db, email=email)
+    if user is None:
+        raise credentials_exception
+        
+    # 3. If everything is good, hand the user's data to the requested route
+    return user
+
+
+# --- PROTECTED DASHBOARD ROUTE ---
+@app.get("/me/dashboard")
+def get_user_dashboard(current_user: models.User = Depends(get_current_user)):
+    # Because of the bouncer (Depends), this code ONLY runs if the token is valid.
+    
+    # For now, we will return the user's details to prove the connection works.
+    # Next, we will upgrade this to query the DB for their specific matches!
+    return {
+        "status": "success",
+        "message": f"Welcome back, {current_user.name}!",
+        "user_data": {
+            "name": current_user.name,
+            "email": current_user.email,
+            "upi_id": current_user.upi_id
+        }
+    }
 # Create a health-check endpoint
 @app.get("/ping")
 async def ping():
