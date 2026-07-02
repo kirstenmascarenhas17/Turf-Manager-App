@@ -440,32 +440,99 @@ class CreateMatchScreen extends StatefulWidget {
 
 class _CreateMatchScreenState extends State<CreateMatchScreen> {
   final _titleController = TextEditingController();
-  final _timeController = TextEditingController();
   final _locationController = TextEditingController();
+  final _timeDisplayController = TextEditingController(); // Only for showing the friendly text
+  
+  DateTime? _selectedDateTime; // The secret variable that holds the raw data
   bool _isSubmitting = false;
 
   @override
   void dispose() {
     _titleController.dispose();
-    _timeController.dispose();
     _locationController.dispose();
+    _timeDisplayController.dispose();
     super.dispose();
   }
 
+  // --- NEW: THE CALENDAR & TIME PICKER LOGIC ---
+  Future<void> _pickDateTime() async {
+    // 1. Show the Calendar
+    final DateTime? date = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(), // Don't let them book in the past!
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.red,
+              onPrimary: Colors.white,
+              surface: Color(0xFF1E1E1E),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (date == null) return; // They clicked cancel
+
+    // 2. Show the Clock
+    if (!mounted) return;
+    final TimeOfDay? time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.red,
+              surface: Color(0xFF1E1E1E),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (time == null) return;
+
+    // 3. Combine them and format
+    setState(() {
+      _selectedDateTime = DateTime(
+        date.year, date.month, date.day, time.hour, time.minute,
+      );
+      
+      // Pad single digits with zeroes (e.g., "9" becomes "09")
+      final day = date.day.toString().padLeft(2, '0');
+      final month = date.month.toString().padLeft(2, '0');
+      final hour = time.hour.toString().padLeft(2, '0');
+      final minute = time.minute.toString().padLeft(2, '0');
+      
+      // Update the visual text field
+      _timeDisplayController.text = "$day/$month/${date.year} $hour:$minute";
+    });
+  }
+
   Future<void> _submitMatch() async {
+    if (_selectedDateTime == null || _titleController.text.isEmpty || _locationController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill out all fields'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
-    // 1. Get the VIP Wristband
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
 
     if (token == null) return;
 
-    // 2. The endpoint to create a match
     final url = Uri.parse('http://10.73.60.1:8000/matches/');
 
     try {
-      // 3. Make the POST request, flashing the wristband in the headers
       final response = await http.post(
         url,
         headers: {
@@ -474,17 +541,15 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
         },
         body: jsonEncode({
           'title': _titleController.text,
-          'date_time': _timeController.text, // Assuming your DB expects date_time
+          // Convert the true DateTime to the strict ISO string for Python!
+          'date_time': _selectedDateTime!.toIso8601String(), 
           'turf_details': _locationController.text,
-          'squad_id': 1 // Hardcoding to squad 1 for testing purposes
+          'squad_id': 1 
         }),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        if (mounted) {
-          // Success! Close the form and go back to the dashboard
-          Navigator.pop(context, true); 
-        }
+        if (mounted) Navigator.pop(context, true); 
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -518,7 +583,6 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
             const Icon(Icons.edit_calendar, size: 80, color: Colors.red),
             const SizedBox(height: 30),
             
-            // Title Field
             TextField(
               controller: _titleController,
               decoration: InputDecoration(
@@ -529,7 +593,6 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
             ),
             const SizedBox(height: 20),
             
-            // Location Field
             TextField(
               controller: _locationController,
               decoration: InputDecoration(
@@ -540,18 +603,19 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
             ),
             const SizedBox(height: 20),
             
-            // Time Field
+            // --- NEW: READ-ONLY FIELD THAT OPENS THE PICKER ---
             TextField(
-              controller: _timeController,
+              controller: _timeDisplayController,
+              readOnly: true, // Prevents manual typing
+              onTap: _pickDateTime, // Opens the native popup
               decoration: InputDecoration(
-                labelText: 'Date & Time (e.g. 10/07/2026 18:00)',
+                labelText: 'Select Date & Time',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 prefixIcon: const Icon(Icons.access_time, color: Colors.red),
               ),
             ),
             const SizedBox(height: 40),
             
-            // Submit Button
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
