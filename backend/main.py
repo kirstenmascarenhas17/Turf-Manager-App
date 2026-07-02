@@ -107,27 +107,31 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
-# --- PROTECTED DASHBOARD ROUTE ---
+# Make sure to add db: Session = Depends(get_db) so the route can talk to MySQL!
 @app.get("/me/dashboard")
-def get_user_dashboard(current_user: models.User = Depends(get_current_user)):
-    # Sending the user's name PLUS a list of matches
+def get_user_dashboard(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Fetch the real matches from your MySQL database using the CRUD function we built in Phase 2
+    real_matches = crud.get_matches(db=db, skip=0, limit=10)
+    
+    # 2. Format the database records into a clean dictionary so Flutter can read them easily
+    formatted_matches = []
+    for match in real_matches:
+        formatted_matches.append({
+            "id": match.id,
+            "title": match.title, 
+            # We convert the datetime object to a string so it travels over the network safely
+            "time": match.date_time.strftime("%d/%m/%Y, %H:%M") if match.date_time else "TBD",
+            "location": match.turf_details
+        })
+
+    # 3. Send the real data back to the phone!
     return {
         "status": "success",
         "message": f"Welcome back, {current_user.name}!",
-        "upcoming_matches": [
-            {
-                "id": 1, 
-                "title": "Friday Night Lights", 
-                "time": "8:00 PM", 
-                "location": "Andheri Sports Complex"
-            },
-            {
-                "id": 2, 
-                "title": "Sunday Scrimmage", 
-                "time": "10:00 AM", 
-                "location": "Bandra Turf"
-            }
-        ]
+        "upcoming_matches": formatted_matches
     }
 
 # Create a health-check endpoint
