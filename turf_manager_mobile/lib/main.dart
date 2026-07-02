@@ -260,12 +260,39 @@ class _LoginScreenState extends State<LoginScreen> {
 class TurfDashboardScreen extends StatelessWidget {
   const TurfDashboardScreen({super.key});
 
+  // --- NEW LOGOUT FUNCTION ---
+  Future<void> _handleLogout(BuildContext context) async {
+    // 1. Open the vault
+    final prefs = await SharedPreferences.getInstance();
+    
+    // 2. Delete the specific JWT token
+    await prefs.remove('jwt_token');
+    
+    print('Vault Emptied: User logged out.');
+
+    // 3. Kick the user back to the Login Screen
+    if (context.mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pitch Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
+        // --- NEW LOGOUT BUTTON IN THE TOP RIGHT ---
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.red),
+            onPressed: () => _handleLogout(context),
+            tooltip: 'Logout',
+          ),
+        ],
       ),
       body: const Center(
         child: Column(
