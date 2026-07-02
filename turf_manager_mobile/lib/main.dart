@@ -267,7 +267,7 @@ class TurfDashboardScreen extends StatefulWidget {
 class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
   String _welcomeMessage = "Loading pitch data...";
   bool _isLoading = true;
-  List<dynamic> _matches = []; // <-- New Vault for our match list
+  List<dynamic> _matches = []; 
 
   @override
   void initState() {
@@ -299,7 +299,7 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
         final data = jsonDecode(response.body);
         setState(() {
           _welcomeMessage = data['message'];
-          _matches = data['upcoming_matches']; // <-- Catch the list from Python!
+          _matches = data['upcoming_matches']; 
           _isLoading = false;
         });
       } else {
@@ -379,13 +379,12 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
                     itemCount: _matches.length,
                     itemBuilder: (context, index) {
                       final match = _matches[index];
-                      // Building a Red & Black Card for every match the backend sends
                       return Card(
-                        color: const Color(0xFF1E1E1E), // Slightly lighter black for contrast
+                        color: const Color(0xFF1E1E1E), 
                         margin: const EdgeInsets.only(bottom: 12.0),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: Colors.red, width: 1), // Red border
+                          side: const BorderSide(color: Colors.red, width: 1), 
                         ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(16.0),
@@ -395,7 +394,6 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                           ),
                           subtitle: Padding(
-                            // FIXED: The rogue parenthesis and property name have been corrected here!
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text(
                               '${match['time']} • ${match['location']}',
@@ -410,6 +408,165 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
                 ),
               ],
             ),
+      
+      // --- THE FAB IS SAFELY ATTACHED HERE ---
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.red,
+        child: const Icon(Icons.add, color: Colors.white, size: 30),
+        onPressed: () async {
+          // Open the Create Match screen
+          final bool? matchCreated = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CreateMatchScreen()),
+          );
+          
+          // If a match was successfully created, refresh the dashboard!
+          if (matchCreated == true) {
+            setState(() => _isLoading = true);
+            _fetchDashboardData();
+          }
+        },
+      ),
+    );
+  }
+}
+
+class CreateMatchScreen extends StatefulWidget {
+  const CreateMatchScreen({super.key});
+
+  @override
+  State<CreateMatchScreen> createState() => _CreateMatchScreenState();
+}
+
+class _CreateMatchScreenState extends State<CreateMatchScreen> {
+  final _titleController = TextEditingController();
+  final _timeController = TextEditingController();
+  final _locationController = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _timeController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitMatch() async {
+    setState(() => _isSubmitting = true);
+
+    // 1. Get the VIP Wristband
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+
+    if (token == null) return;
+
+    // 2. The endpoint to create a match
+    final url = Uri.parse('http://10.73.60.1:8000/matches/');
+
+    try {
+      // 3. Make the POST request, flashing the wristband in the headers
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'title': _titleController.text,
+          'date_time': _timeController.text, // Assuming your DB expects date_time
+          'turf_details': _locationController.text,
+          'squad_id': 1 // Hardcoding to squad 1 for testing purposes
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (mounted) {
+          // Success! Close the form and go back to the dashboard
+          Navigator.pop(context, true); 
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to schedule match'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network Error'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Schedule Match', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.edit_calendar, size: 80, color: Colors.red),
+            const SizedBox(height: 30),
+            
+            // Title Field
+            TextField(
+              controller: _titleController,
+              decoration: InputDecoration(
+                labelText: 'Match Title (e.g. Saturday 5v5)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                prefixIcon: const Icon(Icons.title, color: Colors.red),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Location Field
+            TextField(
+              controller: _locationController,
+              decoration: InputDecoration(
+                labelText: 'Turf Location',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                prefixIcon: const Icon(Icons.stadium, color: Colors.red),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Time Field
+            TextField(
+              controller: _timeController,
+              decoration: InputDecoration(
+                labelText: 'Date & Time (e.g. 10/07/2026 18:00)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                prefixIcon: const Icon(Icons.access_time, color: Colors.red),
+              ),
+            ),
+            const SizedBox(height: 40),
+            
+            // Submit Button
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _isSubmitting ? null : _submitMatch,
+              child: _isSubmitting
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('SCHEDULE MATCH', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

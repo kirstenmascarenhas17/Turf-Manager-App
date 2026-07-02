@@ -174,10 +174,17 @@ def create_user_endpoint(user: schemas.UserCreate, db: Session = Depends(get_db)
 def create_squad_endpoint(squad: schemas.SquadCreate, creator_id: int, db: Session = Depends(get_db)):
     return crud.create_squad(db=db, squad=squad, creator_id=creator_id)
 
+# --- PROTECTED CREATE MATCH ROUTE ---
 @app.post("/matches/", response_model=schemas.MatchResponse)
-def create_match_endpoint(match: schemas.MatchCreate, db: Session = Depends(get_db)):
-    # Note: In a real app, we'd verify the squad_id actually exists first!
-    # For now, we assume the React frontend will send a valid squad_id.
+def create_match_endpoint(
+    match: schemas.MatchCreate, 
+    current_user: models.User = Depends(get_current_user), # <-- The Bouncer!
+    db: Session = Depends(get_db)
+):
+    print(f"User {current_user.name} is creating a new match: {match.title}")
+    
+    # Note: In a full production app, we would link this match directly to current_user.id
+    # For now, we will pass it to your existing CRUD function
     return crud.create_match(db=db, match=match)
 
 @app.post("/rsvps/", response_model=schemas.RSVPResponse)
