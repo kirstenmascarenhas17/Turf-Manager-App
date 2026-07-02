@@ -656,8 +656,9 @@ class MatchDetailsScreen extends StatefulWidget {
 }
 
 class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
-  bool _isJoining = false;
+  bool _isProcessing = false; // Renamed from _isJoining to handle both actions
   bool _isLoadingRoster = true;
+  bool _isJoined = false; // Tracks if the user is on the roster
   List<dynamic> _roster = [];
   int _playerCount = 0;
 
@@ -667,7 +668,6 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     _fetchRoster();
   }
 
-  // --- NEW: FETCH ROSTER LOGIC ---
   Future<void> _fetchRoster() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
@@ -676,10 +676,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.match['id']}/roster');
 
     try {
-      final response = await http.get(
-        url,
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await http.get(url, headers: {'Authorization': 'Bearer $token'});
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -687,6 +684,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
           setState(() {
             _roster = data['players'];
             _playerCount = data['player_count'];
+            _isJoined = data['is_joined'] ?? false; // Read the new backend flag!
             _isLoadingRoster = false;
           });
         }
@@ -697,52 +695,48 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   }
 
   Future<void> _joinMatch() async {
-    setState(() => _isJoining = true);
-
+    setState(() => _isProcessing = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
-    if (token == null) return;
-
+    
     final url = Uri.parse('http://10.73.60.1:8000/rsvps/');
 
     try {
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'match_id': widget.match['id'],
-          'status': 'going'
-        }),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'match_id': widget.match['id'], 'status': 'going'}),
       );
 
-      if (mounted) {
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('You are on the roster!'), backgroundColor: Colors.green),
-          );
-          // REFRESH THE ROSTER INSTANTLY
-          _fetchRoster(); 
-        } else if (response.statusCode == 400) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('You are already joined!'), backgroundColor: Colors.orange),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to join match.'), backgroundColor: Colors.red),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Network Error'), backgroundColor: Colors.red),
-        );
+      if (mounted && (response.statusCode == 200 || response.statusCode == 201)) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joined!'), backgroundColor: Colors.green));
+        _fetchRoster(); 
       }
     } finally {
-      if (mounted) setState(() => _isJoining = false);
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  // --- NEW: LEAVE MATCH FUNCTION ---
+  Future<void> _leaveMatch() async {
+    setState(() => _isProcessing = true);
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    
+    final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.match['id']}/leave');
+
+    try {
+      final response = await http.delete(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (mounted && response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Left the match.'), backgroundColor: Colors.orange));
+        _fetchRoster(); // Refresh to remove your name
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -756,7 +750,6 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // TOP SECTION: Match Info
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -799,17 +792,25 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                
+                // --- DYNAMIC BUTTON LOGIC ---
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
+                    backgroundColor: _isJoined ? Colors.transparent : Colors.red,
+                    foregroundColor: _isJoined ? Colors.red : Colors.white,
                     minimumSize: const Size(double.infinity, 56),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: _isJoined ? const BorderSide(color: Colors.red, width: 2) : BorderSide.none,
+                    ),
                   ),
-                  onPressed: _isJoining ? null : _joinMatch,
-                  child: _isJoining
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('JOIN SQUAD', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  onPressed: _isProcessing ? null : (_isJoined ? _leaveMatch : _joinMatch),
+                  child: _isProcessing
+                      ? CircularProgressIndicator(color: _isJoined ? Colors.red : Colors.white)
+                      : Text(
+                          _isJoined ? 'LEAVE SQUAD' : 'JOIN SQUAD', 
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                        ),
                 ),
               ],
             ),
@@ -817,26 +818,16 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
           
           const Divider(color: Colors.grey, thickness: 0.5),
           
-          // BOTTOM SECTION: The Live Roster
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Current Roster',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+                const Text('Current Roster', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '$_playerCount Players',
-                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                  ),
+                  decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                  child: Text('$_playerCount Players', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -846,12 +837,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
             child: _isLoadingRoster
                 ? const Center(child: CircularProgressIndicator(color: Colors.red))
                 : _roster.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No players yet. Be the first!',
-                          style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-                        ),
-                      )
+                    ? const Center(child: Text('No players yet. Be the first!', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)))
                     : ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         itemCount: _roster.length,
@@ -863,15 +849,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                             child: ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: Colors.red,
-                                child: Text(
-                                  _roster[index][0].toUpperCase(), // Gets the first letter of their name
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
+                                child: Text(_roster[index][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               ),
-                              title: Text(
-                                _roster[index],
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
+                              title: Text(_roster[index], style: const TextStyle(fontWeight: FontWeight.bold)),
                               trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
                             ),
                           );
