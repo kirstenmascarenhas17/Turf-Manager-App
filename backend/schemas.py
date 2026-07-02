@@ -58,15 +58,16 @@ class MatchResponse(MatchBase):
         from_attributes = True
 
 
-# ==========================
 # RSVP SCHEMAS
 # ==========================
 class RSVPBase(BaseModel):
     match_id: int
-    user_id: int
+    # 1. We make user_id optional here so Pydantic doesn't panic when the phone leaves it out
+    user_id: Optional[int] = None
 
 class RSVPToggle(RSVPBase):
-    pass
+    # 2. We add status here so the backend knows to expect {"status": "going"} from Flutter
+    status: str
 
 class RSVPResponse(RSVPBase):
     id: int
