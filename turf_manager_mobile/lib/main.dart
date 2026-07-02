@@ -401,6 +401,17 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
                             ),
                           ),
                           trailing: const Icon(Icons.chevron_right, color: Colors.red),
+                          
+                          // --- ADD THIS NEW ONTAP BEHAVIOR ---
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MatchDetailsScreen(match: match),
+                              ),
+                            );
+                          },       
+                          
                         ),
                       );
                     },
@@ -628,6 +639,145 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
                   ? const CircularProgressIndicator(color: Colors.white)
                   : const Text('SCHEDULE MATCH', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class MatchDetailsScreen extends StatefulWidget {
+  final Map<String, dynamic> match; // We pass the specific match data into this screen
+
+  const MatchDetailsScreen({super.key, required this.match});
+
+  @override
+  State<MatchDetailsScreen> createState() => _MatchDetailsScreenState();
+}
+
+class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
+  bool _isJoining = false;
+
+  Future<void> _joinMatch() async {
+    setState(() => _isJoining = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+
+    if (token == null) return;
+
+    final url = Uri.parse('http://10.73.60.1:8000/rsvps/');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'match_id': widget.match['id'], // We tell Python which match we want!
+          'status': 'going'
+        }),
+      );
+
+      if (mounted) {
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          // Success! Show a green confirmation and go back to the dashboard
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You are on the roster!'), backgroundColor: Colors.green),
+          );
+          Navigator.pop(context);
+        } else if (response.statusCode == 400) {
+          // The backend caught a double-booking
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You are already joined!'), backgroundColor: Colors.orange),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to join match.'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network Error'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isJoining = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Match Details', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.stadium, size: 100, color: Colors.red),
+            const SizedBox(height: 24),
+            
+            Text(
+              widget.match['title'],
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            
+            // Info Box
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withOpacity(0.5)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today, color: Colors.grey, size: 20),
+                      const SizedBox(width: 10),
+                      Text(widget.match['time'], style: const TextStyle(fontSize: 18)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Colors.grey, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(widget.match['location'], style: const TextStyle(fontSize: 18)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            
+            // Join Button
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _isJoining ? null : _joinMatch,
+              child: _isJoining
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('JOIN SQUAD', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),

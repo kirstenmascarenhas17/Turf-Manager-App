@@ -187,18 +187,26 @@ def create_match_endpoint(
     # For now, we will pass it to your existing CRUD function
     return crud.create_match(db=db, match=match)
 
+# --- PROTECTED RSVP ROUTE ---
 @app.post("/rsvps/", response_model=schemas.RSVPResponse)
-def create_rsvp_endpoint(rsvp: schemas.RSVPToggle, db: Session = Depends(get_db)):
-    # Prevent Double-Booking: Check if this user is already in this match
+def create_rsvp_endpoint(
+    rsvp: schemas.RSVPToggle, 
+    current_user: models.User = Depends(get_current_user), # The Bouncer!
+    db: Session = Depends(get_db)
+):
+    # 1. Force the RSVP to belong to the logged-in user securely
+    rsvp.user_id = current_user.id
+    
+    # 2. Prevent Double-Booking
     existing_rsvp = db.query(models.RSVP).filter(
         models.RSVP.match_id == rsvp.match_id,
-        models.RSVP.user_id == rsvp.user_id
+        models.RSVP.user_id == current_user.id
     ).first()
 
     if existing_rsvp:
-        raise HTTPException(status_code=400, detail="User has already RSVP'd to this match")
+        raise HTTPException(status_code=400, detail="You are already on the roster!")
 
-    # Run the RSVP logic
+    # 3. Save the RSVP to MySQL
     db_rsvp = crud.create_rsvp(db=db, rsvp=rsvp)
     
     if not db_rsvp:
