@@ -269,6 +269,7 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
   String _welcomeMessage = "Loading pitch data...";
   bool _isLoading = true;
   List<dynamic> _matches = []; 
+  bool _showSquadOnly = false; // Tracks which filter is active
 
   @override
   void initState() {
@@ -284,6 +285,10 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
       _handleLogout(context);
       return;
     }
+    // NEW: Attach the filter to your existing dashboard URL!
+    final urlString = _showSquadOnly 
+        ? 'http://10.73.60.1:8000/me/dashboard?filter=squad'
+        : 'http://10.73.60.1:8000/me/dashboard';
 
     final url = Uri.parse('http://10.73.60.1:8000/me/dashboard');
 
@@ -372,6 +377,68 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                // ... inside your Column in DashboardScreen ...
+                const Text('Upcoming Matches', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+
+                // --- NEW DASHBOARD FILTER TOGGLE ---
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _showSquadOnly = false);
+                            _fetchDashboardData(); // Reload the data
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: !_showSquadOnly ? Colors.red : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'GLOBAL',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: !_showSquadOnly ? Colors.white : Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _showSquadOnly = true);
+                            _fetchDashboardData(); // Reload the data
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _showSquadOnly ? Colors.red : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'MY SQUAD',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: _showSquadOnly ? Colors.white : Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
 
                 // 3. The Dynamic Scrollable List
                 Expanded(
@@ -1201,3 +1268,4 @@ class _JoinSquadScreenState extends State<JoinSquadScreen> {
       ),
     );
   }
+}

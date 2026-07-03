@@ -109,27 +109,40 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
-# Make sure to add db: Session = Depends(get_db) so the route can talk to MySQL!
 @app.get("/me/dashboard")
 def get_user_dashboard(
+    filter: str = None, # <-- 1. NEW FILTER PARAMETER
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # 1. Fetch the real matches from your MySQL database using the CRUD function we built in Phase 2
-    real_matches = crud.get_matches(db=db, skip=0, limit=10)
-    
-    # 2. Format the database records into a clean dictionary so Flutter can read them easily
+    # --- 2. NEW FILTER LOGIC ---
+    if filter == "squad":
+        # If they want squad matches, but aren't in a squad yet, return empty
+        if not current_user.squad_id:
+            real_matches = []
+        else:
+            # Find everyone who shares your squad ID
+            squad_members = db.query(models.User.id).filter(models.User.squad_id == current_user.squad_id).all()
+            member_ids = [m[0] for m in squad_members]
+            # Fetch only the matches created by those squad members
+            real_matches = db.query(models.Match).filter(models.Match.creator_id.in_(member_ids)).all()
+            
+    else:
+        # If no filter, fetch all matches using your existing CRUD function
+        real_matches = crud.get_matches(db=db, skip=0, limit=10)
+        
+    # --- 3. YOUR ORIGINAL EXACT FORMATTING ---
     formatted_matches = []
     for match in real_matches:
         formatted_matches.append({
             "id": match.id,
-            "title": match.title, 
-            # We convert the datetime object to a string so it travels over the network safely
+            "title": match.title,
+            # Keeping your exact date_time and turf_details variables!
             "time": match.date_time.strftime("%d/%m/%Y, %H:%M") if match.date_time else "TBD",
-            "location": match.turf_details
+            "location": match.turf_details 
         })
-
-    # 3. Send the real data back to the phone!
+        
+    # --- 4. YOUR ORIGINAL RETURN STATEMENT ---
     return {
         "status": "success",
         "message": f"Welcome back, {current_user.name}!",
@@ -271,35 +284,39 @@ def create_rsvp_endpoint(
         
     return db_rsvp
 
-# --- 1. UPGRADED ROSTER ROUTE ---
-@app.get("/matches/{match_id}/roster")
-def get_match_roster(
-    match_id: int, 
-    current_user: models.User = Depends(get_current_user), 
+# --- UPGRADED GET MATCHES ROUTE ---
+@app.get("/matches/")
+def get_matches(
+    filter: str = None, # <-- New optional parameter
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    all_rsvps = db.query(models.RSVP).filter(models.RSVP.match_id == match_id).all()
-    
-    user_ids = []
-    for rsvp in all_rsvps:
-        status_str = str(rsvp.status)
-        if "going" in status_str or "ACTIVE" in status_str:
-            if rsvp.user_id:
-                user_ids.append(rsvp.user_id)
-    
-    if not user_ids:
-        player_names = []
+    # If the phone asks for squad matches:
+    if filter == "squad":
+        # 1. If you aren't in a squad, return nothing
+        if not current_user.squad_id:
+            return []
+            
+        # 2. Find everyone who shares your squad ID
+        squad_members = db.query(models.User.id).filter(models.User.squad_id == current_user.squad_id).all()
+        member_ids = [m[0] for m in squad_members]
+        
+        # 3. Fetch only the matches created by those squad members
+        matches = db.query(models.Match).filter(models.Match.creator_id.in_(member_ids)).all()
+        
+    # If the phone asks for all matches (default):
     else:
-        players = db.query(models.User).filter(models.User.id.in_(user_ids)).all()
-        player_names = [player.name for player in players]
-    
-    return {
-        "match_id": match_id,
-        "player_count": len(player_names),
-        "players": player_names,
-        # NEW: Tell Flutter if the current user is in this list!
-        "is_joined": current_user.name in player_names 
-    }
+        matches = db.query(models.Match).all()
+        
+    # Format the data for the phone
+    return [
+        {
+            "id": m.id,
+            "title": m.title,
+            "location": m.location,
+            "time": m.time.strftime("%A, %b %d @ %I:%M %p"),
+        } for m in matches
+    ]
 
 # --- 2. NEW LEAVE MATCH ROUTE ---
 @app.delete("/matches/{match_id}/leave")
