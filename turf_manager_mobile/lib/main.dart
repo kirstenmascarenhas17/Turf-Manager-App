@@ -368,15 +368,7 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
                   ),
                 ),
                 
-                // 2. The Title for the List
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Text(
-                    'Upcoming Matches',
-                    style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 10),
+                
                 // ... inside your Column in DashboardScreen ...
                 const Text('Upcoming Matches', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
@@ -981,20 +973,32 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         itemCount: _roster.length,
                         itemBuilder: (context, index) {
-                          return Card(
-                            color: const Color(0xFF1E1E1E),
-                            margin: const EdgeInsets.only(bottom: 8.0),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Colors.red,
-                                child: Text(_roster[index][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        // 1. Extract the specific player dictionary from the new backend list
+                        final player = _roster[index];
+                        
+                        // 2. Safely grab the name, or default to 'Unknown' if it's null
+                        final String playerName = player['name'] ?? 'Unknown';
+
+                        return Card(
+                          color: const Color(0xFF1E1E1E),
+                          margin: const EdgeInsets.only(bottom: 8.0),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Colors.red,
+                              child: Text(
+                                playerName[0].toUpperCase(), // Safe to capitalize now!
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                               ),
-                              title: Text(_roster[index], style: const TextStyle(fontWeight: FontWeight.bold)),
-                              trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
                             ),
-                          );
-                        },
+                            title: Text(
+                              playerName, 
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                          ),
+                        );
+                      },
                       ),
           ),
         ],

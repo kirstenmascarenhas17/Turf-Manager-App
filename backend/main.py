@@ -415,6 +415,37 @@ def login_for_swagger(
     # 4. Return it in the strict format Swagger requires
     return {"access_token": access_token, "token_type": "bearer"}
 
+# --- THE RESTORED ROSTER ENDPOINT ---
+@app.get("/matches/{match_id}/roster")
+def get_match_roster(
+    match_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Get all active players for this specific match
+    active_rsvps = db.query(models.RSVP).filter(
+        models.RSVP.match_id == match_id,
+        models.RSVP.status == models.RSVPStatus.ACTIVE
+    ).all()
+    
+    players = []
+    is_joined = False
+    
+    # 2. Build the player list and check if the current user is already in it
+    for rsvp in active_rsvps:
+        user = db.query(models.User).filter(models.User.id == rsvp.user_id).first()
+        if user:
+            players.append({"id": user.id, "name": user.name})
+            # If the current user's ID matches an active RSVP, they are in the match!
+            if user.id == current_user.id:
+                is_joined = True
+                
+    # 3. Send the exact package Flutter is waiting for
+    return {
+        "players": players,
+        "player_count": len(players),
+        "is_joined": is_joined
+    }
 
 # --- MATCH FINANCIAL SUMMARY ENDPOINT ---
 @app.get("/matches/{match_id}/financials")
