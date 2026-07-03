@@ -921,9 +921,35 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   child: _isProcessing
                       ? CircularProgressIndicator(color: _isJoined ? Colors.red : Colors.white)
                       : Text(
-                          _isJoined ? 'LEAVE SQUAD' : 'JOIN SQUAD', 
+                          _isJoined ? 'LEAVE MATCH' : 'JOIN MATCH', 
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
                         ),
+                ),
+                
+                const SizedBox(height: 16), // Give it some breathing room
+
+                // --- NEW FINANCIAL LEDGER BUTTON (THEME FIXED) ---
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.account_balance_wallet, color: Colors.white),
+                  label: const Text('View Financial Ledger', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C2C2C), // Sleek dark grey
+                    foregroundColor: Colors.white, // Ripple effect and text color
+                    elevation: 0, // Flat, modern look
+                    minimumSize: const Size(double.infinity, 56),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.white.withOpacity(0.1), width: 1), // Very subtle premium outline
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MatchLedgerScreen(matchId: widget.match['id']), 
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -1266,6 +1292,169 @@ class _JoinSquadScreenState extends State<JoinSquadScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+class MatchLedgerScreen extends StatefulWidget {
+  final int matchId;
+
+  const MatchLedgerScreen({super.key, required this.matchId});
+
+  @override
+  State<MatchLedgerScreen> createState() => _MatchLedgerScreenState();
+}
+
+class _MatchLedgerScreenState extends State<MatchLedgerScreen> {
+  Map<String, dynamic>? _financialData;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchFinancials();
+  }
+
+  Future<void> _fetchFinancials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    
+    if (token == null) return;
+
+    final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.matchId}/financials');
+
+    try {
+      final response = await http.get(url, headers: {'Authorization': 'Bearer $token'});
+      if (response.statusCode == 200) {
+        setState(() {
+          _financialData = jsonDecode(response.body);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _settlePayment(int userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    
+    final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.matchId}/settle/$userId');
+
+    try {
+      final response = await http.post(url, headers: {'Authorization': 'Bearer $token'});
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Payment marked as settled!'), backgroundColor: Colors.green),
+        );
+        _fetchFinancials(); // Refresh the list to show the updated green status!
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Network Error'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Financial Ledger', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator(color: Colors.red))
+        : _financialData == null 
+          ? const Center(child: Text("Could not load financials", style: TextStyle(color: Colors.grey)))
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // --- 1. THE SUMMARY CARD ---
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.red.withOpacity(0.5), width: 1),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(_financialData!['title'], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Column(
+                              children: [
+                                const Text('TOTAL COST', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                Text('₹${_financialData!['total_cost']}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                              ],
+                            ),
+                            Container(width: 1, height: 40, color: Colors.grey.withOpacity(0.3)),
+                            Column(
+                              children: [
+                                const Text('PER PLAYER', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                Text('₹${_financialData!['individual_share']}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text('PLAYER SETTLEMENTS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  
+                  // --- 2. THE LEDGER LIST ---
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _financialData!['ledger'].length,
+                      itemBuilder: (context, index) {
+                        final player = _financialData!['ledger'][index];
+                        final isPaid = player['payment_status'] == 'paid';
+
+                        return Card(
+                          color: const Color(0xFF1E1E1E),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: isPaid ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                              child: Icon(
+                                isPaid ? Icons.check_circle : Icons.pending,
+                                color: isPaid ? Colors.green : Colors.red,
+                              ),
+                            ),
+                            title: Text(player['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                              isPaid ? 'Settled' : 'Owes ₹${_financialData!['individual_share']}',
+                              style: TextStyle(color: isPaid ? Colors.green : Colors.grey),
+                            ),
+                            trailing: isPaid
+                                ? const SizedBox.shrink() // Hide button if already paid
+                                : ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      foregroundColor: Colors.white,
+                                      side: const BorderSide(color: Colors.grey),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () => _settlePayment(player['user_id']),
+                                    child: const Text('MARK PAID'),
+                                  ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }
