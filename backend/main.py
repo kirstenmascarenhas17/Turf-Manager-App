@@ -414,3 +414,81 @@ def login_for_swagger(
     
     # 4. Return it in the strict format Swagger requires
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+# --- MATCH FINANCIAL SUMMARY ENDPOINT ---
+@app.get("/matches/{match_id}/financials")
+def get_match_financials(
+    match_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Fetch the match using your exact database model
+    match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+        
+    # 2. Get all active RSVPs for this match
+    active_rsvps = db.query(models.RSVP).filter(
+        models.RSVP.match_id == match_id,
+        models.RSVP.status == models.RSVPStatus.ACTIVE
+    ).all()
+    
+    player_count = len(active_rsvps)
+    
+    # 3. Dynamic Cost Splitting Calculation (Ensure no division by zero)
+    total_cost = float(match.total_cost) if match.total_cost else 0.0
+    individual_share = total_cost / player_count if player_count > 0 else 0.0
+    
+    # 4. Build a clean list of players with their specific payment statuses
+    player_ledger = []
+    for rsvp in active_rsvps:
+        # Fetch the user details linked to the RSVP record
+        user = db.query(models.User).filter(models.User.id == rsvp.user_id).first()
+        if user:
+            player_ledger.append({
+                "user_id": user.id,
+                "name": user.name,
+                "payment_status": rsvp.payment_status # This is our newly injected column!
+            })
+            
+    return {
+        "match_id": match.id,
+        "title": match.title,
+        "total_cost": total_cost,
+        "player_count": player_count,
+        "individual_share": round(individual_share, 2),
+        "ledger": player_ledger
+    }
+
+
+# --- ADMIN ROUTE: MARK PLAYER AS PAID ---
+@app.post("/matches/{match_id}/settle/{user_id}")
+def settle_player_payment(
+    match_id: int,
+    user_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Verify the match exists
+    match = db.query(models.Match).filter(models.Match.id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+        
+    # 2. Find the specific RSVP record for that player
+    rsvp = db.query(models.RSVP).filter(
+        models.RSVP.match_id == match_id,
+        models.RSVP.user_id == user_id
+    ).first()
+    
+    if not rsvp:
+        raise HTTPException(status_code=404, detail="RSVP record not found for this player")
+        
+    # 3. Toggle or set the payment status to settled
+    rsvp.payment_status = "paid"
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"Payment marked as paid for match: {match.title}"
+    }

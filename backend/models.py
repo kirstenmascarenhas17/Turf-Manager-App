@@ -84,6 +84,9 @@ class RSVP(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(Enum(RSVPStatus), default=RSVPStatus.ACTIVE, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+    
+    # --- NEW: Track if the player has paid! ---
+    payment_status = Column(String(50), default="pending")
 
     # Relationships
     match = relationship("Match", back_populates="rsvps")
