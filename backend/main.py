@@ -195,6 +195,42 @@ def create_squad_endpoint(
     
     return new_squad
 
+# Create a simple Pydantic schema for the input payload right above the route
+class JoinSquadRequest(BaseModel):
+    invite_code: str
+
+# --- PROTECTED JOIN SQUAD ROUTE ---
+@app.post("/squads/join")
+def join_squad_endpoint(
+    payload: JoinSquadRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Clean the incoming code (make it uppercase, remove whitespace)
+    clean_code = payload.invite_code.strip().upper()
+    
+    # 2. Look up the squad by the invite code
+    squad = db.query(models.Squad).filter(models.Squad.invite_code == clean_code).first()
+    
+    if not squad:
+        raise HTTPException(
+            status_code=404, 
+            detail="Invalid invite code. Squad not found."
+        )
+        
+    # 3. Link the user to the squad
+    # Depending on your schema design, we either update a squad_id on the User table,
+    # or add a row to a squad_members junction table. 
+    # Here, we update the user's current squad link:
+    current_user.squad_id = squad.id
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"Successfully joined squad: {squad.name}",
+        "squad_name": squad.name
+    }
+
 # --- PROTECTED CREATE MATCH ROUTE ---
 @app.post("/matches/", response_model=schemas.MatchResponse)
 def create_match_endpoint(

@@ -628,33 +628,60 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
             ),
             const SizedBox(height: 40),
             
+            // --- 1. PRIMARY ACTION: Schedule Match ---
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                minimumSize: const Size(double.infinity, 56),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: _isSubmitting ? null : _submitMatch,
-              child: _isSubmitting
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('SCHEDULE MATCH', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                // Keep your existing schedule match logic here
+              },
+              child: const Text('SCHEDULE MATCH', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
+
+            const SizedBox(height: 16), // <-- THE FIX: 16 pixels of breathing room
+
+            // --- 2. SECONDARY ACTION: Create a Squad (Tinted Premium Style) ---
             ElevatedButton.icon(
-              icon: const Icon(Icons.group_add, size: 24),
-              label: const Text('Create a Squad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              icon: const Icon(Icons.group_add, size: 24, color: Colors.red), // Red icon
+              label: const Text('Create a Squad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)), // Red text
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 56), // Makes it a nice wide block
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                backgroundColor: Colors.red.withOpacity(0.15), // Subtle red tint for the background
+                foregroundColor: Colors.red, // The splash ripple effect color
+                elevation: 0, // Removes the drop shadow for a sleek, flat look
+                minimumSize: const Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const CreateSquadScreen()),
+                );
+              },
+            ),
+
+            const SizedBox(height: 12), // <-- THE FIX: 12 pixels of breathing room
+
+            // --- 3. TERTIARY ACTION: Join a Squad ---
+            ElevatedButton.icon(
+              icon: const Icon(Icons.group, size: 24),
+              label: const Text('Join a Squad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                foregroundColor: Colors.red,
+                minimumSize: const Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Colors.red, width: 2), // Outlined to show it's an alternative action
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const JoinSquadScreen()),
                 );
               },
             ),
@@ -1038,6 +1065,134 @@ class _CreateSquadScreenState extends State<CreateSquadScreen> {
                 },
               ),
             ]
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class JoinSquadScreen extends StatefulWidget {
+  const JoinSquadScreen({super.key});
+
+  @override
+  State<JoinSquadScreen> createState() => _JoinSquadScreenState();
+}
+
+class _JoinSquadScreenState extends State<JoinSquadScreen> {
+  final TextEditingController _codeController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _joinSquad() async {
+    final code = _codeController.text.trim();
+    if (code.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invite codes must be exactly 6 characters'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+
+    final url = Uri.parse('http://10.73.60.1:8000/squads/join');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'invite_code': code}),
+      );
+
+      if (mounted) {
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['message']), backgroundColor: Colors.green),
+          );
+          Navigator.pop(context); // Send them back to the dashboard on success
+        } else if (response.statusCode == 404) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid code. Squad not found!'), backgroundColor: Colors.red),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to join squad'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network Error'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Join a Squad', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.vpn_key, size: 80, color: Colors.red),
+            const SizedBox(height: 24),
+            const Text(
+              'Enter the 6-digit invite code provided by your squad captain.',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            TextField(
+              controller: _codeController,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.characters,
+              maxLength: 6,
+              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4),
+              textAlign: TextAlign.center,
+              decoration: InputDecoration(
+                counterText: "", // Hides the default max length counter text
+                hintText: 'U Q Z R 4 E',
+                hintStyle: TextStyle(color: Colors.grey.withOpacity(0.3)),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Colors.red, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: const Color(0xFF1E1E1E),
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _isLoading ? null : _joinSquad,
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('SUBMIT CODE', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
           ],
         ),
       ),
