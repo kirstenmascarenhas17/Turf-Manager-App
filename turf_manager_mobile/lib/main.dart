@@ -339,13 +339,23 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
       appBar: AppBar(
         title: const Text('Pitch Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            onPressed: () => _handleLogout(context),
-            tooltip: 'Logout',
-          ),
-        ],
+        // --- THE MENU BUTTON IS NOW ON THE LEFT ---
+        leading: IconButton(
+          icon: const Icon(Icons.menu, size: 28),
+          tooltip: 'Menu',
+          onPressed: () async {
+            final shouldRefresh = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsMenuScreen()),
+            );
+            
+            if (shouldRefresh == true) {
+              _fetchDashboardData(); 
+            }
+          },
+        ),
+        // We can leave actions empty, or you can completely delete the `actions: [],` line
+        actions: [], 
       ),
       body: _isLoading 
           ? const Center(child: CircularProgressIndicator(color: Colors.red))
@@ -1459,6 +1469,256 @@ class _MatchLedgerScreenState extends State<MatchLedgerScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  String _selectedPosition = 'Unassigned'; // Default matches our database
+  bool _isLoading = false;
+
+  final List<String> _positions = [
+    'Unassigned',
+    'Striker',
+    'Midfielder',
+    'Defender',
+    'Goalkeeper'
+  ];
+
+  Future<void> _updateProfile() async {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a display name'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+
+    if (token == null) return;
+
+    final url = Uri.parse('http://10.73.60.1:8000/me/profile');
+
+    try {
+      final response = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'name': _nameController.text.trim(),
+          'preferred_position': _selectedPosition,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: Colors.green),
+          );
+          Navigator.pop(context, true); // Pop back and signal a refresh!
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to update profile'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network Error'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Icon(Icons.account_circle, size: 100, color: Colors.grey),
+              const SizedBox(height: 32),
+              
+              const Text('DISPLAY NAME', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _nameController,
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+                decoration: InputDecoration(
+                  hintText: 'e.g. Kirsten Mascarenhas',
+                  hintStyle: TextStyle(color: Colors.grey.withOpacity(0.3)),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: Colors.red, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFF1E1E1E),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              const Text('PREFERRED POSITION', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedPosition,
+                dropdownColor: const Color(0xFF1E1E1E),
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+                decoration: InputDecoration(
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: Colors.red, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFF1E1E1E),
+                ),
+                items: _positions.map((String position) {
+                  return DropdownMenuItem<String>(
+                    value: position,
+                    child: Text(position),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() => _selectedPosition = newValue);
+                  }
+                },
+              ),
+              const SizedBox(height: 48),
+
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _isLoading ? null : _updateProfile,
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('SAVE PROFILE', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class SettingsMenuScreen extends StatelessWidget {
+  const SettingsMenuScreen({super.key});
+
+  Future<void> _handleLogout(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token'); // Destroy the vault key
+
+    if (context.mounted) {
+      // Annihilate the navigation stack and boot them to the login screen
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()), // Ensure your login screen class name matches here
+        (route) => false,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Menu', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        children: [
+          // --- PROFILE OPTION ---
+          ListTile(
+            leading: const Icon(Icons.person, color: Colors.white, size: 28),
+            title: const Text('Edit Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            subtitle: const Text('Change name and position', style: TextStyle(color: Colors.grey)),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            tileColor: const Color(0xFF1E1E1E),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onTap: () async {
+              // Navigate to the profile screen
+              final changed = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
+              // If the profile was updated, pop the menu screen too and tell the dashboard to refresh
+              if (changed == true && context.mounted) {
+                Navigator.pop(context, true); 
+              }
+            },
+          ),
+          
+          const SizedBox(height: 16),
+
+          // --- MATCH HISTORY OPTION (Placeholder for later) ---
+          ListTile(
+            leading: const Icon(Icons.history, color: Colors.white, size: 28),
+            title: const Text('Match History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            subtitle: const Text('View past games and payments', style: TextStyle(color: Colors.grey)),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            tileColor: const Color(0xFF1E1E1E),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Match History feature coming soon!'), backgroundColor: Colors.grey),
+              );
+            },
+          ),
+
+          const SizedBox(height: 48),
+
+          // --- LOGOUT OPTION ---
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red, size: 28),
+            title: const Text('Logout', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+            tileColor: Colors.red.withOpacity(0.1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.red.withOpacity(0.3), width: 1),
+            ),
+            onTap: () => _handleLogout(context),
+          ),
+        ],
+      ),
     );
   }
 }
