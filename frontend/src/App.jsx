@@ -311,7 +311,7 @@ function App() {
               <h2 style={{ fontSize: '1.4rem', fontWeight: '800', marginTop: 0, marginBottom: '1.5rem', letterSpacing: '0.03em' }}>UPCOMING MATCHES</h2>
               {matches.length === 0 ? <p style={{ color: colors.textSecondary }}>No matches scheduled yet.</p> : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {matches.map(match => (
+                  {Array.isArray(matches) && matches.map((match) => (
                     <div key={match.id} style={{ backgroundColor: '#1C1C1C', padding: '1rem', borderRadius: '4px', border: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontWeight: '700', fontSize: '1.1rem' }}>{match.title.toUpperCase()}</span>

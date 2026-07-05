@@ -36,7 +36,8 @@ class User(Base):
     upi_id = Column(String(100), nullable=True)
     password = Column(String(255))
     created_at = Column(DateTime, server_default=func.now())
-
+    preferred_position = Column(String(50), default="Unassigned")
+    
     # Relationships
     created_squads = relationship("Squad", back_populates="creator")
     squads = relationship("Squad", secondary=squad_members, back_populates="members")

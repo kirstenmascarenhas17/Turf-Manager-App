@@ -28,6 +28,10 @@ class AIRequest(BaseModel):
 # Formally bind the metadata to create tables in MySQL
 models.Base.metadata.create_all(bind=engine)
 
+# Schema for the incoming profile data
+class ProfileUpdate(BaseModel):
+    name: str
+    preferred_position: str
 
 # This tells Python what data to expect from Flutter
 class LoginRequest(BaseModel):
@@ -522,4 +526,28 @@ def settle_player_payment(
     return {
         "status": "success",
         "message": f"Payment marked as paid for match: {match.title}"
+    }
+
+
+# --- PROFILE UPDATE ENDPOINT ---
+@app.put("/me/profile")
+def update_user_profile(
+    profile_data: ProfileUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Update the user's data in the current session
+    current_user.name = profile_data.name
+    current_user.preferred_position = profile_data.preferred_position
+    
+    # 2. Commit the changes permanently to MySQL
+    db.commit()
+    
+    return {
+        "status": "success", 
+        "message": "Profile updated successfully!",
+        "user": {
+            "name": current_user.name,
+            "preferred_position": current_user.preferred_position
+        }
     }
