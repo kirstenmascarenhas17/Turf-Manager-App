@@ -983,32 +983,37 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         itemCount: _roster.length,
                         itemBuilder: (context, index) {
-                        // 1. Extract the specific player dictionary from the new backend list
-                        final player = _roster[index];
-                        
-                        // 2. Safely grab the name, or default to 'Unknown' if it's null
-                        final String playerName = player['name'] ?? 'Unknown';
+                          final player = _roster[index];
+                          
+                          // Safely grab the name and position, defaulting if they haven't set it yet
+                          final String playerName = player['name'] ?? 'Unknown Player';
+                          final String playerPos = player['preferred_position'] ?? 'Unassigned';
 
-                        return Card(
-                          color: const Color(0xFF1E1E1E),
-                          margin: const EdgeInsets.only(bottom: 8.0),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.red,
-                              child: Text(
-                                playerName[0].toUpperCase(), // Safe to capitalize now!
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          return Card(
+                            color: const Color(0xFF1E1E1E),
+                            margin: const EdgeInsets.only(bottom: 8.0),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.red,
+                                child: Text(
+                                  playerName[0].toUpperCase(), 
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
                               ),
+                              title: Text(
+                                playerName, 
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              // --- NEW: Display the player's preferred position! ---
+                              subtitle: Text(
+                                playerPos.toUpperCase(),
+                                style: const TextStyle(color: Colors.grey, fontSize: 12, letterSpacing: 1),
+                              ),
+                              trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
                             ),
-                            title: Text(
-                              playerName, 
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                          ),
-                        );
-                      },
+                          );
+                        },
                       ),
           ),
         ],

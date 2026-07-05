@@ -439,7 +439,11 @@ def get_match_roster(
     for rsvp in active_rsvps:
         user = db.query(models.User).filter(models.User.id == rsvp.user_id).first()
         if user:
-            players.append({"id": user.id, "name": user.name})
+            players.append({
+                "id": user.id, 
+                "name": user.name,
+                "preferred_position": user.preferred_position
+            })
             # If the current user's ID matches an active RSVP, they are in the match!
             if user.id == current_user.id:
                 is_joined = True
