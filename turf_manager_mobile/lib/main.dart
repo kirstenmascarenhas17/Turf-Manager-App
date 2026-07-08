@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart'; 
 import 'config.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 void main() async {
   // 1. Tell Flutter to hold on a second while we start the engine
@@ -13,10 +14,27 @@ void main() async {
   // 2. Boot up Firebase using the secure google-services.json file
   await Firebase.initializeApp();
 
-  // 3. Run the app! (Make sure this matches your actual root widget name)
-  runApp(const TurfManagerApp()); 
-}
+  // --- NEW PERMISSION LOGIC ---
+  // 1. Ask the user for permission (Mandatory for Android 13+)
+  NotificationSettings settings = await FirebaseMessaging.instance.requestPermission();
+  print('User granted permission: ${settings.authorizationStatus}');
 
+  // 2. Grab the token
+  final fcmToken = await FirebaseMessaging.instance.getToken();
+  print("========================================");
+  print("🔥 FIREBASE TOKEN: $fcmToken");
+  print("========================================");
+
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    print("========================================");
+    print("🔔 FOREGROUND NOTIFICATION RECEIVED!");
+    print("Title: ${message.notification?.title}");
+    print("Body: ${message.notification?.body}");
+    print("========================================");
+  });
+  runApp(const TurfManagerApp());
+
+}
 class TurfManagerApp extends StatelessWidget {
   const TurfManagerApp({super.key});
 
