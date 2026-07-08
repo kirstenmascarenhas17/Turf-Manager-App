@@ -4,9 +4,17 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart'; 
 import 'config.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
-  runApp(const TurfManagerApp());
+void main() async {
+  // 1. Tell Flutter to hold on a second while we start the engine
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // 2. Boot up Firebase using the secure google-services.json file
+  await Firebase.initializeApp();
+
+  // 3. Run the app! (Make sure this matches your actual root widget name)
+  runApp(const TurfManagerApp()); 
 }
 
 class TurfManagerApp extends StatelessWidget {
