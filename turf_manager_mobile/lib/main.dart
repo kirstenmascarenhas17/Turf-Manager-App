@@ -111,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text;
 
     // Use the exact IP address from your hotspot
-    final url = Uri.parse('http://10.73.60.1:8000/login'); 
+    final url = Uri.parse('http://10.20.72.1:8000/login'); 
 
     try {
       final response = await http.post(
@@ -287,10 +287,10 @@ class _TurfDashboardScreenState extends State<TurfDashboardScreen> {
     }
     // NEW: Attach the filter to your existing dashboard URL!
     final urlString = _showSquadOnly 
-        ? 'http://10.73.60.1:8000/me/dashboard?filter=squad'
-        : 'http://10.73.60.1:8000/me/dashboard';
+        ? 'http://10.20.72.1:8000/me/dashboard?filter=squad'
+        : 'http://10.20.72.1:8000/me/dashboard';
 
-    final url = Uri.parse('http://10.73.60.1:8000/me/dashboard');
+    final url = Uri.parse('http://10.20.72.1:8000/me/dashboard');
 
     try {
       final response = await http.get(
@@ -611,7 +611,7 @@ class _CreateMatchScreenState extends State<CreateMatchScreen> {
 
     if (token == null) return;
 
-    final url = Uri.parse('http://10.73.60.1:8000/matches/');
+    final url = Uri.parse('http://10.20.72.1:8000/matches/');
 
     try {
       final response = await http.post(
@@ -788,7 +788,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     final token = prefs.getString('jwt_token');
     if (token == null) return;
 
-    final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.match['id']}/roster');
+    final url = Uri.parse('http://10.20.72.1:8000/matches/${widget.match['id']}/roster');
 
     try {
       final response = await http.get(url, headers: {'Authorization': 'Bearer $token'});
@@ -814,7 +814,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
     
-    final url = Uri.parse('http://10.73.60.1:8000/rsvps/');
+    final url = Uri.parse('http://10.20.72.1:8000/rsvps/');
 
     try {
       final response = await http.post(
@@ -838,7 +838,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
     
-    final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.match['id']}/leave');
+    final url = Uri.parse('http://10.20.72.1:8000/matches/${widget.match['id']}/leave');
 
     try {
       final response = await http.delete(
@@ -1047,7 +1047,7 @@ class _CreateSquadScreenState extends State<CreateSquadScreen> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
 
-    final url = Uri.parse('http://10.73.60.1:8000/squads/');
+    final url = Uri.parse('http://10.20.72.1:8000/squads/');
 
     try {
       final response = await http.post(
@@ -1208,7 +1208,7 @@ class _JoinSquadScreenState extends State<JoinSquadScreen> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
 
-    final url = Uri.parse('http://10.73.60.1:8000/squads/join');
+    final url = Uri.parse('http://10.20.72.1:8000/squads/join');
 
     try {
       final response = await http.post(
@@ -1341,7 +1341,7 @@ class _MatchLedgerScreenState extends State<MatchLedgerScreen> {
     
     if (token == null) return;
 
-    final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.matchId}/financials');
+    final url = Uri.parse('http://10.20.72.1:8000/matches/${widget.matchId}/financials');
 
     try {
       final response = await http.get(url, headers: {'Authorization': 'Bearer $token'});
@@ -1360,7 +1360,7 @@ class _MatchLedgerScreenState extends State<MatchLedgerScreen> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
     
-    final url = Uri.parse('http://10.73.60.1:8000/matches/${widget.matchId}/settle/$userId');
+    final url = Uri.parse('http://10.20.72.1:8000/matches/${widget.matchId}/settle/$userId');
 
     try {
       final response = await http.post(url, headers: {'Authorization': 'Bearer $token'});
@@ -1513,7 +1513,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (token == null) return;
 
-    final url = Uri.parse('http://10.73.60.1:8000/me/profile');
+    final url = Uri.parse('http://10.20.72.1:8000/me/profile');
 
     try {
       final response = await http.put(

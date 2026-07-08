@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "496754750979",
+    "project_id": "turf-manager-d0452",
+    "storage_bucket": "turf-manager-d0452.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:496754750979:android:4db70e54b5d459d5be4036",
+        "android_client_info": {
+          "package_name": "com.example.turf_manager_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzPmF1PfpQiCOW1fF-GA2XMXoDr7zXQNI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
