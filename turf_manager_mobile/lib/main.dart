@@ -20,6 +20,7 @@ void main() async {
   print('User granted permission: ${settings.authorizationStatus}');
 
   // 2. Grab the token
+  await FirebaseMessaging.instance.deleteToken();
   final fcmToken = await FirebaseMessaging.instance.getToken();
   print("========================================");
   print("🔥 FIREBASE TOKEN: $fcmToken");
